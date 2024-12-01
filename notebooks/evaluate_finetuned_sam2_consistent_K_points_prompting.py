@@ -35,10 +35,9 @@ def get_center_of_maximal_inscribed_circle_in_xy(mask_bool):
 def filter_points_outside_mask(points_in_yx: npt.NDArray[np.int64], mask_bool: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
     if not points_in_yx.size:
         return points_in_yx
-    
     return points_in_yx[mask_bool[points_in_yx[:, 0], points_in_yx[:, 1]]]
 
-def is_prev_prompt_in_mask(prev_prompt_x: int, prev_prompt_y: int, mask_bool: np.array[bool]) -> bool:
+def is_prev_prompt_in_mask(prev_prompt_x: int, prev_prompt_y: int, mask_bool: npt.NDArray[np.bool]) -> bool:
     return mask_bool[prev_prompt_y, prev_prompt_x]
 
 
@@ -65,8 +64,8 @@ def add_prompt(video_label, predictor, inference_state, annotation_every_n):
     prompts = []
     print('add_prompt/video_length', video_length)
 
-    prev_center_xy = np.array([], shape=(0, 2))
-    prev_positive_prompts_yx = np.array([], shape=(0, 2))
+    prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+    prev_positive_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
     for frame_index in range(0, video_length):
         ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
@@ -77,13 +76,13 @@ def add_prompt(video_label, predictor, inference_state, annotation_every_n):
         is_first_frame_for_point_prompt = frame_index % annotation_every_n == 1
         if should_add_point_prompt:
             mask_coords = np.argwhere(mask_bool)
-            prev_center_xy = filter_points_outside_mask(prev_center_xy[:, ::-1], mask_coords)[:, ::-1]
-            prev_positive_prompts_yx = filter_points_outside_mask(prev_positive_prompts_yx, mask_coords)
+            prev_center_xy = filter_points_outside_mask(prev_center_xy[:, ::-1], mask_bool)[:, ::-1]
+            prev_positive_prompts_yx = filter_points_outside_mask(prev_positive_prompts_yx, mask_bool)
 
             no_positive_points_in_mask = len(mask_coords) == 0
             if no_positive_points_in_mask:
-                prev_center_xy = np.array([], shape=(0, 2))
-                prev_positive_prompts_yx = np.array([], shape=(0, 2))
+                prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+                prev_positive_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
                 continue
 
             if is_first_frame_for_point_prompt or not prev_center_xy.size:
@@ -91,7 +90,7 @@ def add_prompt(video_label, predictor, inference_state, annotation_every_n):
             else: # if not the first frame, we should add points prompts
                 n_sample_points = min(10, len(mask_coords))
                 n_positive_prompts = prev_positive_prompts_yx.shape[0]
-                positive_prompts_yx = np.array(random.choices(mask_coords, k=n_sample_points - n_positive_prompts))
+                positive_prompts_yx = np.array(random.choices(mask_coords, k=n_sample_points - n_positive_prompts), dtype=np.int32)
                 positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
                 prev_positive_prompts_yx = np.concatenate([prev_positive_prompts_yx, positive_prompts_yx], axis=0)
 
@@ -103,7 +102,7 @@ def add_prompt(video_label, predictor, inference_state, annotation_every_n):
             add_point_prompts(predictor, inference_state, ann_obj_id, frame_index, points, labels)
             prompts.append({'type': 'point', 'frame': frame_index, 'points': prev_center_xy})
         else:
-            prev_center_xy = None
+            prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
             add_mask_prompt(predictor, inference_state, ann_obj_id, frame_index, mask_bool)
             prompts.append({'type': 'mask', 'frame': frame_index, 'mask': mask_bool})
     return prompts
