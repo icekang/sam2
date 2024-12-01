@@ -7,6 +7,7 @@ import os
 from sam2.build_sam import build_sam2_video_predictor
 import random
 import cv2
+import numpy.typing as npt
 
 random.seed(0)
 color_pallete = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0]])
@@ -27,47 +28,84 @@ def maximal_inscribed_circle(binary_label):
     _, radius, _, center = cv2.minMaxLoc(dist_map)
     return center, radius
 
+def get_center_of_maximal_inscribed_circle_in_xy(mask_bool):
+    center, _ = maximal_inscribed_circle(mask_bool) # already in x,y as they are the output from opencv
+    return np.array([center])
+
+def filter_points_outside_mask(points_in_yx: npt.NDArray[np.int64], mask_bool: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
+    if not points_in_yx.size:
+        return points_in_yx
+    
+    return points_in_yx[mask_bool[points_in_yx[:, 0], points_in_yx[:, 1]]]
+
+def is_prev_prompt_in_mask(prev_prompt_x: int, prev_prompt_y: int, mask_bool: np.array[bool]) -> bool:
+    return mask_bool[prev_prompt_y, prev_prompt_x]
+
+
+def add_point_prompts(predictor, inference_state, ann_obj_id, frame_index, points, labels):
+    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+        inference_state=inference_state,
+        frame_idx=frame_index,
+        obj_id=ann_obj_id,
+        points=points,
+        labels=labels,
+    )
+
+def add_mask_prompt(predictor, inference_state, ann_obj_id, frame_idx, mask_bool):
+    _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
+        inference_state=inference_state,
+        frame_idx=frame_idx,
+        obj_id=ann_obj_id,
+        mask=mask_bool,
+    )
+
 def add_prompt(video_label, predictor, inference_state, annotation_every_n):
     video_length = Path(video_label).glob("*.png")
     video_length = len(list(video_length))
     prompts = []
     print('add_prompt/video_length', video_length)
 
-    prev_center = None
-    for i in range(0, video_length):
+    prev_center_xy = np.array([], shape=(0, 2))
+    prev_positive_prompts_yx = np.array([], shape=(0, 2))
+    for frame_index in range(0, video_length):
         ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
-        mask, palette = load_ann_png(f'{video_label}/{i:05}.png')
+        mask, palette = load_ann_png(f'{video_label}/{frame_index:05}.png')
         mask_bool = np.all(mask == color_pallete[1].reshape(1, 1, 3), axis=2)
         
-        if i % annotation_every_n != 0:
+        should_add_point_prompt = frame_index % annotation_every_n != 0
+        is_first_frame_for_point_prompt = frame_index % annotation_every_n == 1
+        if should_add_point_prompt:
             mask_coords = np.argwhere(mask_bool)
-            if len(mask_coords) == 0:
-                prev_center = None
+            prev_center_xy = filter_points_outside_mask(prev_center_xy[:, ::-1], mask_coords)[:, ::-1]
+            prev_positive_prompts_yx = filter_points_outside_mask(prev_positive_prompts_yx, mask_coords)
+
+            no_positive_points_in_mask = len(mask_coords) == 0
+            if no_positive_points_in_mask:
+                prev_center_xy = np.array([], shape=(0, 2))
+                prev_positive_prompts_yx = np.array([], shape=(0, 2))
                 continue
-            if i % annotation_every_n == 1 or prev_center is None:
-                center, radius = maximal_inscribed_circle(mask_bool) # already in x,y as they are the output from opencv
-                random_point = np.array([center])
-                prev_center = random_point
-            assert prev_center is not None, f"prev_center should not be None at frame {i} while annotation is every {annotation_every_n} (modulo is {i % annotation_every_n})"
-            labels = np.array([1], np.int32) # for labels, `1` means positive click and `0` means negative click
-            _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                inference_state=inference_state,
-                frame_idx=i,
-                obj_id=ann_obj_id,
-                points=prev_center,
-                labels=labels,
-            )
-            prompts.append({'type': 'point', 'frame': i, 'points': prev_center})
+
+            if is_first_frame_for_point_prompt or not prev_center_xy.size:
+                prev_center_xy = get_center_of_maximal_inscribed_circle_in_xy(mask_bool)
+            else: # if not the first frame, we should add points prompts
+                n_sample_points = min(10, len(mask_coords))
+                n_positive_prompts = prev_positive_prompts_yx.shape[0]
+                positive_prompts_yx = np.array(random.choices(mask_coords, k=n_sample_points - n_positive_prompts))
+                positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
+                prev_positive_prompts_yx = np.concatenate([prev_positive_prompts_yx, positive_prompts_yx], axis=0)
+
+            points = np.concatenate([
+                prev_center_xy, 
+                prev_positive_prompts_yx[:, ::-1] # convert from (y, x) to (x, y)
+            ], axis=0)
+            labels = np.ones(points.shape[0], dtype=np.int32)
+            add_point_prompts(predictor, inference_state, ann_obj_id, frame_index, points, labels)
+            prompts.append({'type': 'point', 'frame': frame_index, 'points': prev_center_xy})
         else:
-            prev_center = None
-            _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
-                inference_state=inference_state,
-                frame_idx=i,
-                obj_id=ann_obj_id,
-                mask=mask_bool,
-            )
-            prompts.append({'type': 'mask', 'frame': i, 'mask': mask_bool})
+            prev_center_xy = None
+            add_mask_prompt(predictor, inference_state, ann_obj_id, frame_index, mask_bool)
+            prompts.append({'type': 'mask', 'frame': frame_index, 'mask': mask_bool})
     return prompts
 
 def run_propagation(predictor, inference_state):
@@ -138,7 +176,7 @@ def run(model_cfg, sam2_checkpoint, output_name):
         annotation_every_n=4
         prompts = add_prompt(video_label, predictor, inference_state, annotation_every_n)
         video_segments = run_propagation(predictor, inference_state)
-        prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}_consistent_point_prompts/')
+        prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}_consistent_10+1_point_prompts/')
         prediction_output.mkdir(exist_ok=True)
         torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
         torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
