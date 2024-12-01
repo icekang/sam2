@@ -21,6 +21,7 @@ import torch.distributed as dist
 import torch.nn as nn
 from hydra.utils import instantiate
 from iopath.common.file_io import g_pathmgr
+import torchvision
 
 from training.optimizer import construct_optimizer
 
@@ -447,6 +448,46 @@ class Trainer:
     def is_intermediate_val_epoch(self, epoch):
         return epoch % self.val_epoch_freq == 0 and epoch < self.max_epochs - 1
 
+    def log_pred_masks_and_targets(
+            self,
+            outs_batch: List[Dict],
+            targets_batch: torch.Tensor,
+            phase: str,
+    ):
+        targets_batch = targets_batch.cpu()
+        assert len(outs_batch) == len(targets_batch)
+        resulting_grid = []
+        for outputs, targets in zip(outs_batch, targets_batch):
+            target_masks = targets.unsqueeze(1).float()
+            src_masks_list = outputs["multistep_pred_multimasks_high_res"]
+            for src_masks, target in zip(src_masks_list, target_masks):
+                expanded_target_masks = target.expand_as(src_masks)
+                prob = src_masks.cpu().sigmoid()
+                nrow = prob.size(1)
+                if nrow < 3:
+                    prob = torch.cat([prob] + [torch.zeros_like(prob[:, 0:1, :, :])] * (3 - nrow), dim=1)
+                    expanded_target_masks = torch.cat([expanded_target_masks] + [torch.zeros_like(expanded_target_masks[:, 0:1, :, :])] * (3 - nrow), dim=1)
+
+                prob = prob.swapaxes(0, 1)
+                expanded_target_masks = expanded_target_masks.swapaxes(0, 1)
+
+                concatenated = torch.cat([prob, expanded_target_masks], dim=0)
+                grid = torchvision.utils.make_grid(concatenated, nrow=3)
+                resulting_grid.append(grid)
+
+        resulting_grid = torch.cat(resulting_grid, dim=1)
+        resulting_grid = torch.nn.functional.interpolate(resulting_grid.unsqueeze(0), scale_factor=(1/4, 1/4), mode='nearest').squeeze(0)
+        largest_dim = max(resulting_grid.size(1), resulting_grid.size(2))
+        
+        square_grid = torchvision.transforms.functional.pad(resulting_grid, (0, 0, largest_dim - resulting_grid.size(2), largest_dim - resulting_grid.size(1)))
+        visualization_str = f"Visualizations/{phase}_pred_vs_target_masks"
+        self.logger.log_image(
+            visualization_str,
+            square_grid,
+            self.steps[phase],
+        )
+        return
+
     def _step(
         self,
         batch: BatchedVideoDatapoint,
@@ -463,7 +504,7 @@ class Trainer:
         loss_str = f"Losses/{phase}_{key}_loss"
 
         loss_log_str = os.path.join("Step_Losses", loss_str)
-
+        self.log_pred_masks_and_targets(outputs, targets, phase)
         # loss contains multiple sub-components we wish to log
         step_losses = {}
         if isinstance(loss, dict):

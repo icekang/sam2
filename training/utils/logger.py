@@ -135,6 +135,18 @@ class TensorBoardLogger(TensorBoardWriterWrapper):
             return
         self._writer.add_scalar(name, data, global_step=step, new_style=True)
 
+    def log_image(self, name: str, data: Tensor, step: int) -> None:
+        """Add image data to TensorBoard.
+
+        Args:
+            name (string): tag name used to group images
+            data (Tensor): image data to log
+            step (int, optional): step value to record
+        """
+        if not self._writer:
+            return
+        self._writer.add_image(name, data, global_step=step)
+
     def log_hparams(
         self, hparams: Dict[str, Scalar], meters: Dict[str, Scalar]
     ) -> None:
@@ -167,6 +179,10 @@ class Logger:
     def log(self, name: str, data: Scalar, step: int) -> None:
         if self.tb_logger:
             self.tb_logger.log(name, data, step)
+
+    def log_image(self, name: str, data: Tensor, step: int) -> None:
+        if self.tb_logger:
+            self.tb_logger.log_image(name, data, step)
 
     def log_hparams(
         self, hparams: Dict[str, Scalar], meters: Dict[str, Scalar]
