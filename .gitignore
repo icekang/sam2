@@ -8,6 +8,11 @@ build/*
 _C.*
 outputs/*
 checkpoints/*.pt
+checkpoints/*.pth
 notebooks/videos
 notebooks/*.mp4
 sam2_logs/
+notebooks/sam2.1*/
+notebooks/finetuned_small*/
+notebooks/small_annotate_every_8/
+*ipynb_checkpoints/
