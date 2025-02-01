@@ -105,53 +105,49 @@ def run(model_cfg, sam2_checkpoint, output_name):
     test_label_dir = dataset_dir / 'labelsTs'
 
 
-    device = torch.device("cuda")
-    # sam2_checkpoint = "../sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune.yaml/checkpoints/checkpoint.pt"
-    # sam2_checkpoint = '/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_simple_optimizer.yaml/checkpoints/checkpoint.pt'
-    # sam2_checkpoint = '/home/gridsan/nchutisilp/projects/segment-anything-2/checkpoints/sam2.1_hiera_small.pt'
-    # model_cfg = "configs/sam2.1/sam2.1_hiera_s.yaml"
+    device = torch.device("cpu")
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
     resulting_dices_with_prompted_frames = []
     resulting_dices_without_prompted_frames = []
 
-    for volume_path in test_label_dir.glob('*.nii.gz'):
-        filename = volume_path.name.replace('.nii.gz', '')
+    # for volume_path in test_label_dir.glob('*.nii.gz'):
+    #     filename = volume_path.name.replace('.nii.gz', '')
 
-        video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTs/{filename}'
-        video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTs/{filename}'
-        inference_state = predictor.init_state(video_path=video_dir)
+    #     video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTs/{filename}'
+    #     video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTs/{filename}'
+    #     inference_state = predictor.init_state(video_path=video_dir)
 
-        annotation_every_n=4
-        prompts = add_prompt(video_label, predictor, inference_state, annotation_every_n)
-        video_segments = run_propagation(predictor, inference_state)
-        prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}/')
-        prediction_output.mkdir(exist_ok=True)
-        torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
-        torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
+    #     annotation_every_n=4
+    #     prompts = add_prompt(video_label, predictor, inference_state, annotation_every_n)
+    #     video_segments = run_propagation(predictor, inference_state)
+    #     prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}/')
+    #     prediction_output.mkdir(exist_ok=True)
+    #     torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
+    #     torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
 
-        pred = convert_video_segments_into_prediction_array(video_segments, object_id=1)
-        gt = get_label_array(video_dir, video_label)
+    #     pred = convert_video_segments_into_prediction_array(video_segments, object_id=1)
+    #     gt = get_label_array(video_dir, video_label)
 
-        labels, dices, avg_dice = dice_score_of_a_volume(gt, pred)
-        print('Dice including prompted frames of', filename, ':', avg_dice)
-        resulting_dices_with_prompted_frames.append(avg_dice)
+    #     labels, dices, avg_dice = dice_score_of_a_volume(gt, pred)
+    #     print('Dice including prompted frames of', filename, ':', avg_dice)
+    #     resulting_dices_with_prompted_frames.append(avg_dice)
 
-        selector_mask = np.ones(gt.shape[0])
-        selector_mask[::annotation_every_n] = 0
-        selector_mask = selector_mask.astype(np.bool)
-        labels, dices, avg_dice = dice_score_of_a_volume(gt[selector_mask], pred[selector_mask])
-        print('Dice excluding prompted frames of ', filename, ':', avg_dice)
-        resulting_dices_without_prompted_frames.append(avg_dice)
+    #     selector_mask = np.ones(gt.shape[0])
+    #     selector_mask[::annotation_every_n] = 0
+    #     selector_mask = selector_mask.astype(np.bool)
+    #     labels, dices, avg_dice = dice_score_of_a_volume(gt[selector_mask], pred[selector_mask])
+    #     print('Dice excluding prompted frames of ', filename, ':', avg_dice)
+    #     resulting_dices_without_prompted_frames.append(avg_dice)
 
 
-    print('Average dice including prompted frames:', sum(resulting_dices_with_prompted_frames) / len(resulting_dices_with_prompted_frames))
-    print('Average dice excluding prompted frames:', sum(resulting_dices_without_prompted_frames) / len(resulting_dices_without_prompted_frames))
-    print('Done')
+    # print('Average dice including prompted frames:', sum(resulting_dices_with_prompted_frames) / len(resulting_dices_with_prompted_frames))
+    # print('Average dice excluding prompted frames:', sum(resulting_dices_without_prompted_frames) / len(resulting_dices_without_prompted_frames))
+    # print('Done')
 
 if __name__ == '__main__':
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml")
+    model_cfg_name = "fold0.yaml"
+    run(model_cfg="configs/sam2.1_training/splits_final/fold0.yaml",
+        sam2_checkpoint=f"/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/splits_final/{model_cfg_name}/checkpoints/checkpoint.pt", 
+        output_name=f"{model_cfg_name[:-5]}")

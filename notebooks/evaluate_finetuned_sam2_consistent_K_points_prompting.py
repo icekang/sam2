@@ -100,7 +100,7 @@ def add_prompt(video_label, predictor, inference_state, annotation_every_n):
             ], axis=0)
             labels = np.ones(points.shape[0], dtype=np.int32)
             add_point_prompts(predictor, inference_state, ann_obj_id, frame_index, points, labels)
-            prompts.append({'type': 'point', 'frame': frame_index, 'points': prev_center_xy})
+            prompts.append({'type': 'point', 'frame': frame_index, 'points': points})
         else:
             prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
             add_mask_prompt(predictor, inference_state, ann_obj_id, frame_index, mask_bool)
@@ -200,7 +200,14 @@ def run(model_cfg, sam2_checkpoint, output_name):
     print('Done')
 
 if __name__ == '__main__':
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml")
+    # run(model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
+    #     sam2_checkpoint=f"/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/{model_cfg_name}/checkpoints/checkpoint.pt",
+    #     output_name=f"{model_cfg_name[:-5]}")
+    model_cfg_name = "sam2.1_hiera_s_MOSE_from_scratch_scale4_var1.yaml"
+    run(model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
+        sam2_checkpoint=f"/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/{model_cfg_name}/checkpoints/checkpoint.pt",
+        output_name=f"{model_cfg_name[:-5]}")

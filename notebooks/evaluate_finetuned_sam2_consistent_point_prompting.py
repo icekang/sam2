@@ -163,7 +163,12 @@ def run(model_cfg, sam2_checkpoint, output_name):
     print('Done')
 
 if __name__ == '__main__':
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml")
-    run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var1.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var2.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var3.yaml")
+    # run("configs/sam2.1/sam2.1_hiera_s.yaml", "/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml/checkpoints/checkpoint.pt", "sam2.1_hiera_s_MOSE_finetune_scale4_var4.yaml")
+
+    model_cfg_name = "sam2.1_hiera_s_MOSE_finetune.yaml"
+    run(model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
+        sam2_checkpoint=f"/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/{model_cfg_name}/checkpoints/checkpoint.pt",
+        output_name=f"{model_cfg_name[:-5]}")
