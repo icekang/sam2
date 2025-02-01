@@ -18,3 +18,4 @@ notebooks/sam2.1*/
 notebooks/finetuned_small*/
 notebooks/small_annotate_every_8/
 *ipynb_checkpoints/
+demo/backend/checkpoints/*.pt
