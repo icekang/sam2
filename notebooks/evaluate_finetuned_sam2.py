@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
@@ -6,6 +7,8 @@ import torch
 import os
 from sam2.build_sam import build_sam2_video_predictor
 import random
+
+from training.utils.train_utils import register_omegaconf_resolvers
 
 random.seed(0)
 color_pallete = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0]])
@@ -98,11 +101,27 @@ def dice_score_of_a_volume(gt, pred, ignore_index = 0):
     avg_dice = sum(dices) / len(dices)
     return labels, dices, avg_dice
 
-def run(model_cfg, sam2_checkpoint, output_name):
+def get_splits():
+    DATASET_ID = "307"
+    DATASET_NAME = "Sohee_Calcium_OCT_CrossValidation"
+
+    nnUNet_preprocessed = Path(os.environ["nnUNet_preprocessed"])
+    nnUNet_raw = Path(os.environ["nnUNet_raw"])
+
+    split_filepath = nnUNet_preprocessed / f"Dataset{DATASET_ID}_{DATASET_NAME}/splits_final.json"
+    imageTr_dir = nnUNet_raw / f"Dataset{DATASET_ID}_{DATASET_NAME}/imagesTr"
+    labelTr_dir = nnUNet_raw / f"Dataset{DATASET_ID}_{DATASET_NAME}/labelsTr"
+
+    with open(split_filepath, 'r') as f:
+        splits = json.load(f)
+    
+    return splits, imageTr_dir, labelTr_dir
+
+def run(model_cfg, sam2_checkpoint, output_name, fold):
 
     dataset_dir = Path('/home/gridsan/nchutisilp/datasets/nnUNet_Datasets/nnUNet_raw/Dataset302_Calcium_OCTv2/')
-    test_image_dir = dataset_dir / 'imagesTs'
-    test_label_dir = dataset_dir / 'labelsTs'
+    # test_image_dir = dataset_dir / 'imagesTs'
+    # test_label_dir = dataset_dir / 'labelsTs'
 
 
     device = torch.device("cpu")
@@ -112,42 +131,53 @@ def run(model_cfg, sam2_checkpoint, output_name):
     resulting_dices_with_prompted_frames = []
     resulting_dices_without_prompted_frames = []
 
-    # for volume_path in test_label_dir.glob('*.nii.gz'):
-    #     filename = volume_path.name.replace('.nii.gz', '')
+    splits, test_image_dir, test_label_dir = get_splits()
+    print(splits)
+    split = splits[fold]
+    print(fold)
+    val_ids = split["val"]
+    for filename in val_ids:
 
-    #     video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTs/{filename}'
-    #     video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTs/{filename}'
-    #     inference_state = predictor.init_state(video_path=video_dir)
+        video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTs/{filename}'
+        video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTs/{filename}'
+        print("Processing", filename)
+        print(video_dir)
+        inference_state = predictor.init_state(video_path=video_dir)
 
-    #     annotation_every_n=4
-    #     prompts = add_prompt(video_label, predictor, inference_state, annotation_every_n)
-    #     video_segments = run_propagation(predictor, inference_state)
-    #     prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}/')
-    #     prediction_output.mkdir(exist_ok=True)
-    #     torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
-    #     torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
+        annotation_every_n=4
+        prompts = add_prompt(video_label, predictor, inference_state, annotation_every_n)
+        video_segments = run_propagation(predictor, inference_state)
+        prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}/')
+        prediction_output.mkdir(exist_ok=True)
+        torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
+        torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
 
-    #     pred = convert_video_segments_into_prediction_array(video_segments, object_id=1)
-    #     gt = get_label_array(video_dir, video_label)
+        pred = convert_video_segments_into_prediction_array(video_segments, object_id=1)
+        gt = get_label_array(video_dir, video_label)
 
-    #     labels, dices, avg_dice = dice_score_of_a_volume(gt, pred)
-    #     print('Dice including prompted frames of', filename, ':', avg_dice)
-    #     resulting_dices_with_prompted_frames.append(avg_dice)
+        labels, dices, avg_dice = dice_score_of_a_volume(gt, pred)
+        print('Dice including prompted frames of', filename, ':', avg_dice)
+        resulting_dices_with_prompted_frames.append(avg_dice)
 
-    #     selector_mask = np.ones(gt.shape[0])
-    #     selector_mask[::annotation_every_n] = 0
-    #     selector_mask = selector_mask.astype(np.bool)
-    #     labels, dices, avg_dice = dice_score_of_a_volume(gt[selector_mask], pred[selector_mask])
-    #     print('Dice excluding prompted frames of ', filename, ':', avg_dice)
-    #     resulting_dices_without_prompted_frames.append(avg_dice)
+        selector_mask = np.ones(gt.shape[0])
+        selector_mask[::annotation_every_n] = 0
+        selector_mask = selector_mask.astype(np.bool)
+        labels, dices, avg_dice = dice_score_of_a_volume(gt[selector_mask], pred[selector_mask])
+        print('Dice excluding prompted frames of ', filename, ':', avg_dice)
+        resulting_dices_without_prompted_frames.append(avg_dice)
 
 
-    # print('Average dice including prompted frames:', sum(resulting_dices_with_prompted_frames) / len(resulting_dices_with_prompted_frames))
-    # print('Average dice excluding prompted frames:', sum(resulting_dices_without_prompted_frames) / len(resulting_dices_without_prompted_frames))
-    # print('Done')
+    print('Average dice including prompted frames:', sum(resulting_dices_with_prompted_frames) / len(resulting_dices_with_prompted_frames))
+    print('Average dice excluding prompted frames:', sum(resulting_dices_without_prompted_frames) / len(resulting_dices_without_prompted_frames))
+    print('Done')
 
 if __name__ == '__main__':
     model_cfg_name = "fold0.yaml"
-    run(model_cfg="configs/sam2.1_training/splits_final/fold0.yaml",
-        sam2_checkpoint=f"/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/splits_final/{model_cfg_name}/checkpoints/checkpoint.pt", 
-        output_name=f"{model_cfg_name[:-5]}")
+    checkpoint_path = Path("/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/")
+
+    run(
+        model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
+        sam2_checkpoint= checkpoint_path / f"splits_final/{model_cfg_name}/checkpoints/checkpoint.pt", 
+        output_name=f"{model_cfg_name[:-5]}",
+        fold=0
+    )
