@@ -138,8 +138,8 @@ def run(model_cfg, sam2_checkpoint, output_name, fold):
     val_ids = split["val"]
     for filename in val_ids:
 
-        video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTs/{filename}'
-        video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTs/{filename}'
+        video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTr/{filename}'
+        video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTr/{filename}'
         print("Processing", filename)
         print(video_dir)
         inference_state = predictor.init_state(video_path=video_dir)
