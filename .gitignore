@@ -9,8 +9,10 @@ _C.*
 outputs/*
 checkpoints/*.pt
 checkpoints/*.pth
+
 notebooks/videos
 notebooks/*.mp4
+notebooks/sdf_predictions/*
 sam2_logs/
 notebooks/sam2.1*/
 notebooks/finetuned_small*/
