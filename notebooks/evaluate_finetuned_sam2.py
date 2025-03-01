@@ -172,12 +172,13 @@ def run(model_cfg, sam2_checkpoint, output_name, fold):
     print('Done')
 
 if __name__ == '__main__':
-    model_cfg_name = "fold0.yaml"
+    fold = 4
+    model_cfg_name = f"fold{fold}.yaml"
     checkpoint_path = Path("/home/gridsan/nchutisilp/projects/segment-anything-2/sam2_logs/configs/sam2.1_training/")
 
     run(
         model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
         sam2_checkpoint= checkpoint_path / f"splits_final/{model_cfg_name}/checkpoints/checkpoint.pt", 
         output_name=f"{model_cfg_name[:-5]}",
-        fold=0
+        fold=fold
     )
