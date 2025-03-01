@@ -1,13 +1,16 @@
 import json
-from pathlib import Path
-import numpy as np
-import SimpleITK as sitk
-from PIL import Image
-import torch
 import os
-from sam2.build_sam import build_sam2_video_predictor
 import random
+from pathlib import Path
 
+import cv2
+import numpy as np
+import numpy.typing as npt
+import SimpleITK as sitk
+import torch
+from PIL import Image
+
+from sam2.build_sam import build_sam2_video_predictor
 from training.utils.train_utils import register_omegaconf_resolvers
 
 random.seed(0)
@@ -22,6 +25,15 @@ def load_ann_png(path):
     return mask, palette
 
 
+def maximal_inscribed_circle(binary_label):
+    # Convert the label image to a binary image
+    binary_label = binary_label.astype(np.uint8)
+
+    dist_map = cv2.distanceTransform(binary_label, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+    _, radius, _, center = cv2.minMaxLoc(dist_map)
+    return center, radius
+
+
 def add_prompt(video_label: str, predictor, inference_state, annotation_every_n: int):
     video_length = Path(video_label).glob("*.png")
     video_length = len(list(video_length))
@@ -34,32 +46,58 @@ def add_prompt(video_label: str, predictor, inference_state, annotation_every_n:
         mask_bool = np.all(mask == color_pallete[1].reshape(1, 1, 3), axis=2)
 
         if i % annotation_every_n != 0:
-            mask_coords = np.argwhere(mask_bool)
-            if len(mask_coords) == 0:
-                continue
-            random_point = random.choice(mask_coords)
-            random_point = random_point[::-1]  # (y, x) -> (x, y)
-            random_point = np.array([random_point])
-            labels = np.array(
-                [1], np.int32
-            )  # for labels, `1` means positive click and `0` means negative click
-            _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+            random_point = add_random_positive_point(
+                predictor=predictor,
                 inference_state=inference_state,
                 frame_idx=i,
-                obj_id=ann_obj_id,
-                points=random_point,
-                labels=labels,
+                ann_obj_id=ann_obj_id,
+                mask_bool=mask_bool,
             )
-            prompts.append({"type": "point", "frame": i, "points": random_point})
+            if random_point:
+                prompts.append({"type": "point", "frame": i, "points": random_point})
         else:
-            _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
+            add_mask_prompt(
+                predictor=predictor,
                 inference_state=inference_state,
                 frame_idx=i,
-                obj_id=ann_obj_id,
-                mask=mask_bool,
+                ann_obj_id=ann_obj_id,
+                mask_bool=mask_bool,
             )
             prompts.append({"type": "mask", "frame": i, "mask": mask_bool})
     return prompts
+
+
+def add_random_positive_point(
+    predictor, inference_state, frame_idx: int, ann_obj_id: int, mask_bool: npt.NDArray
+):
+    mask_coords = np.argwhere(mask_bool)
+    if len(mask_coords) == 0:  # No label in this frame
+        return None
+    random_point = random.choice(mask_coords)
+    random_point = random_point[::-1]  # (y, x) -> (x, y)
+    random_point = np.array([random_point])
+    labels = np.array(
+        [1], np.int32
+    )  # for labels, `1` means positive click and `0` means negative click
+    _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+        inference_state=inference_state,
+        frame_idx=frame_idx,
+        obj_id=ann_obj_id,
+        points=random_point,
+        labels=labels,
+    )
+    return random_point
+
+
+def add_mask_prompt(
+    predictor, inference_state, frame_idx: int, ann_obj_id: int, mask_bool: npt.NDArray
+):
+    _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
+        inference_state=inference_state,
+        frame_idx=frame_idx,
+        obj_id=ann_obj_id,
+        mask=mask_bool,
+    )
 
 
 def run_propagation(predictor, inference_state):
@@ -132,15 +170,20 @@ def get_splits():
 
     return splits, imageTr_dir, labelTr_dir
 
+
 def get_video_dir(filename: str):
-    video_dir = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTr/{filename}'
+    video_dir = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTr/{filename}"
     return video_dir
 
+
 def get_video_label(filename: str):
-    video_label = f'/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTr/{filename}'
+    video_label = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTr/{filename}"
     return video_label
 
-def calcuate_dice_score(video_segments: dict, filename: str, annotation_every_n: int) -> tuple[float, float]:
+
+def calcuate_dice_score(
+    video_segments: dict, filename: str, annotation_every_n: int
+) -> tuple[float, float]:
     video_dir = get_video_dir(filename=filename)
     video_label = get_video_label(filename=filename)
 
@@ -148,14 +191,24 @@ def calcuate_dice_score(video_segments: dict, filename: str, annotation_every_n:
     gt = get_label_array(video_dir, video_label)
 
     labels, dices, avg_dice_with_prompt_masks = dice_score_of_a_volume(gt, pred)
-    print('Dice including prompted frames of', filename, ':', avg_dice_with_prompt_masks)
+    print(
+        "Dice including prompted frames of", filename, ":", avg_dice_with_prompt_masks
+    )
 
     selector_mask = np.ones(gt.shape[0])
     selector_mask[::annotation_every_n] = 0
     selector_mask = selector_mask.astype(np.bool)
-    labels, dices, avg_dice_without_prompted_masks = dice_score_of_a_volume(gt[selector_mask], pred[selector_mask])
-    print('Dice excluding prompted frames of ', filename, ':', avg_dice_without_prompted_masks)
+    labels, dices, avg_dice_without_prompted_masks = dice_score_of_a_volume(
+        gt[selector_mask], pred[selector_mask]
+    )
+    print(
+        "Dice excluding prompted frames of ",
+        filename,
+        ":",
+        avg_dice_without_prompted_masks,
+    )
     return avg_dice_with_prompt_masks, avg_dice_without_prompted_masks
+
 
 def run(model_cfg: str, sam2_checkpoint: str, output_name: str, fold: int):
     device = torch.device("cpu")
@@ -180,24 +233,41 @@ def run(model_cfg: str, sam2_checkpoint: str, output_name: str, fold: int):
         inference_state = predictor.init_state(video_path=video_dir)
 
         # Add mask every 4 frame
-        annotation_every_n=4
-        prompts = add_prompt(video_label, predictor, inference_state, annotation_every_n)
+        annotation_every_n = 4
+        prompts = add_prompt(
+            video_label, predictor, inference_state, annotation_every_n
+        )
 
         # Run inference
         video_segments = run_propagation(predictor, inference_state)
 
         # Save the results for later visualization
-        prediction_output = Path(f'./{output_name}_annotate_every_{annotation_every_n}/')
+        prediction_output = Path(
+            f"./{output_name}_annotate_every_{annotation_every_n}/"
+        )
         prediction_output.mkdir(exist_ok=True)
         torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
         torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
 
         # Calculate Dice score
-        dice_with_masks, dice_without_masks = calcuate_dice_score(video_segments=video_segments, filename=filename, annotation_every_n=annotation_every_n)
+        dice_with_masks, dice_without_masks = calcuate_dice_score(
+            video_segments=video_segments,
+            filename=filename,
+            annotation_every_n=annotation_every_n,
+        )
         resulting_dices_with_prompted_frames.append(dice_with_masks)
-        resulting_dices_without_prompted_frames.append(resulting_dices_without_prompted_frames)
+        resulting_dices_without_prompted_frames.append(
+            resulting_dices_without_prompted_frames
+        )
 
-
-    print('Average dice including prompted frames:', sum(resulting_dices_with_prompted_frames) / len(resulting_dices_with_prompted_frames))
-    print('Average dice excluding prompted frames:', sum(resulting_dices_without_prompted_frames) / len(resulting_dices_without_prompted_frames))
-    print('Done')
+    print(
+        "Average dice including prompted frames:",
+        sum(resulting_dices_with_prompted_frames)
+        / len(resulting_dices_with_prompted_frames),
+    )
+    print(
+        "Average dice excluding prompted frames:",
+        sum(resulting_dices_without_prompted_frames)
+        / len(resulting_dices_without_prompted_frames),
+    )
+    print("Done")
