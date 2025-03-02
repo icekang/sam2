@@ -25,13 +25,6 @@ def load_ann_png(path):
     return mask, palette
 
 
-def maximal_inscribed_circle(binary_label):
-    # Convert the label image to a binary image
-    binary_label = binary_label.astype(np.uint8)
-
-    dist_map = cv2.distanceTransform(binary_label, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
-    _, radius, _, center = cv2.minMaxLoc(dist_map)
-    return center, radius
 
 
 def add_prompt(video_label: str, predictor, inference_state, annotation_every_n: int):
