@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 from prompt_strategy_evaluation.video_prompter import VideoPrompter
-from prompter import MaskPrompter, Prompter
+from prompter import MaskPrompter, ConsistentPointPrompter, KConsistentPointPrompter, RandomPointPrompter
 
 from prompt_strategy_evaluation.helper import (
     calcuate_dice_score,
