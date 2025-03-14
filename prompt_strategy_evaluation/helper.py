@@ -25,9 +25,9 @@ def load_ann_png(path):
     return mask, palette
 
 
-
-
-def add_prompt(video_label: str, predictor, inference_state, annotation_every_n: int):
+def add_prompt(
+    video_label: str, predictor, inference_state, annotation_every_n: int
+):
     video_length = Path(video_label).glob("*.png")
     video_length = len(list(video_length))
     prompts = []
@@ -47,7 +47,9 @@ def add_prompt(video_label: str, predictor, inference_state, annotation_every_n:
                 mask_bool=mask_bool,
             )
             if random_point:
-                prompts.append({"type": "point", "frame": i, "points": random_point})
+                prompts.append(
+                    {"type": "point", "frame": i, "points": random_point}
+                )
         else:
             add_mask_prompt(
                 predictor=predictor,
@@ -61,7 +63,11 @@ def add_prompt(video_label: str, predictor, inference_state, annotation_every_n:
 
 
 def add_random_positive_point(
-    predictor, inference_state, frame_idx: int, ann_obj_id: int, mask_bool: npt.NDArray
+    predictor,
+    inference_state,
+    frame_idx: int,
+    ann_obj_id: int,
+    mask_bool: npt.NDArray,
 ):
     mask_coords = np.argwhere(mask_bool)
     if len(mask_coords) == 0:  # No label in this frame
@@ -83,7 +89,11 @@ def add_random_positive_point(
 
 
 def add_mask_prompt(
-    predictor, inference_state, frame_idx: int, ann_obj_id: int, mask_bool: npt.NDArray
+    predictor,
+    inference_state,
+    frame_idx: int,
+    ann_obj_id: int,
+    mask_bool: npt.NDArray,
 ):
     _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
         inference_state=inference_state,
@@ -95,10 +105,14 @@ def add_mask_prompt(
 
 def run_propagation(predictor, inference_state):
     # run propagation throughout the video and collect the results in a dict
-    video_segments = {}  # video_segments contains the per-frame segmentation results
-    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
-        inference_state
-    ):
+    video_segments = (
+        {}
+    )  # video_segments contains the per-frame segmentation results
+    for (
+        out_frame_idx,
+        out_obj_ids,
+        out_mask_logits,
+    ) in predictor.propagate_in_video(inference_state):
         video_segments[out_frame_idx] = {
             out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
             for i, out_obj_id in enumerate(out_obj_ids)
@@ -108,7 +122,8 @@ def run_propagation(predictor, inference_state):
 
 def convert_video_segments_into_prediction_array(video_segments, object_id=1):
     pred = [
-        video_segments[frame_index][1] for frame_index in range(len(video_segments))
+        video_segments[frame_index][1]
+        for frame_index in range(len(video_segments))
     ]
     pred = np.concatenate(pred, axis=0)
     pred = pred.astype(np.uint8)
@@ -139,7 +154,9 @@ def dice_score_of_a_volume(gt, pred, ignore_index=0):
         pred_bool = label == pred
 
         intersection = np.logical_and(gt_bool, pred_bool)
-        dices.append(2.0 * intersection.sum() / (gt_bool.sum() + pred_bool.sum()))
+        dices.append(
+            2.0 * intersection.sum() / (gt_bool.sum() + pred_bool.sum())
+        )
 
     avg_dice = sum(dices) / len(dices)
     return labels, dices, avg_dice
@@ -153,7 +170,8 @@ def get_splits():
     nnUNet_raw = Path(os.environ["nnUNet_raw"])
 
     split_filepath = (
-        nnUNet_preprocessed / f"Dataset{DATASET_ID}_{DATASET_NAME}/splits_final.json"
+        nnUNet_preprocessed
+        / f"Dataset{DATASET_ID}_{DATASET_NAME}/splits_final.json"
     )
     imageTr_dir = nnUNet_raw / f"Dataset{DATASET_ID}_{DATASET_NAME}/imagesTr"
     labelTr_dir = nnUNet_raw / f"Dataset{DATASET_ID}_{DATASET_NAME}/labelsTr"
@@ -180,12 +198,17 @@ def calcuate_dice_score(
     video_dir = get_video_dir(filename=filename)
     video_label = get_video_label(filename=filename)
 
-    pred = convert_video_segments_into_prediction_array(video_segments, object_id=1)
+    pred = convert_video_segments_into_prediction_array(
+        video_segments, object_id=1
+    )
     gt = get_label_array(video_dir, video_label)
 
     labels, dices, avg_dice_with_prompt_masks = dice_score_of_a_volume(gt, pred)
     print(
-        "Dice including prompted frames of", filename, ":", avg_dice_with_prompt_masks
+        "Dice including prompted frames of",
+        filename,
+        ":",
+        avg_dice_with_prompt_masks,
     )
 
     selector_mask = np.ones(gt.shape[0])
@@ -201,66 +224,3 @@ def calcuate_dice_score(
         avg_dice_without_prompted_masks,
     )
     return avg_dice_with_prompt_masks, avg_dice_without_prompted_masks
-
-
-def run(model_cfg: str, sam2_checkpoint: str, output_name: str, fold: int):
-    device = torch.device("cpu")
-
-    predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
-
-    resulting_dices_with_prompted_frames = []
-    resulting_dices_without_prompted_frames = []
-
-    # Get splits to get the image filenames in the validation set for that split.
-    splits, test_image_dir, test_label_dir = get_splits()
-    print(splits)
-    split = splits[fold]
-    print(fold)
-    val_ids = split["val"]
-    for filename in val_ids:
-        # Load the image
-        video_dir = get_video_dir(filename=filename)
-        video_label = get_video_label(filename=filename)
-        print("Processing", filename)
-        print(video_dir)
-        inference_state = predictor.init_state(video_path=video_dir)
-
-        # Add mask every 4 frame
-        annotation_every_n = 4
-        prompts = add_prompt(
-            video_label, predictor, inference_state, annotation_every_n
-        )
-
-        # Run inference
-        video_segments = run_propagation(predictor, inference_state)
-
-        # Save the results for later visualization
-        prediction_output = Path(
-            f"./{output_name}_annotate_every_{annotation_every_n}/"
-        )
-        prediction_output.mkdir(exist_ok=True)
-        torch.save(video_segments, prediction_output / f"video_segments_{filename}.pt")
-        torch.save(prompts, prediction_output / f"prompts_{filename}.pt")
-
-        # Calculate Dice score
-        dice_with_masks, dice_without_masks = calcuate_dice_score(
-            video_segments=video_segments,
-            filename=filename,
-            annotation_every_n=annotation_every_n,
-        )
-        resulting_dices_with_prompted_frames.append(dice_with_masks)
-        resulting_dices_without_prompted_frames.append(
-            resulting_dices_without_prompted_frames
-        )
-
-    print(
-        "Average dice including prompted frames:",
-        sum(resulting_dices_with_prompted_frames)
-        / len(resulting_dices_with_prompted_frames),
-    )
-    print(
-        "Average dice excluding prompted frames:",
-        sum(resulting_dices_without_prompted_frames)
-        / len(resulting_dices_without_prompted_frames),
-    )
-    print("Done")
