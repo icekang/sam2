@@ -1,10 +1,15 @@
 from pathlib import Path
 
 import torch
-from prompt_strategy_evaluation.video_prompter import VideoPrompter
-from prompter import MaskPrompter, ConsistentPointPrompter, KConsistentPointPrompter, RandomPointPrompter
+from video_prompter import VideoPrompter
+from prompter import (
+    MaskPrompter,
+    ConsistentPointPrompter,
+    KConsistentPointPrompter,
+    RandomPointPrompter,
+)
 
-from prompt_strategy_evaluation.helper import (
+from helper import (
     calcuate_dice_score,
     get_splits,
     get_video_dir,
@@ -96,13 +101,15 @@ def get_video_prompter(*prompter_names: list[str]):
     for prompter_name in prompter_names:
         match prompter_name:
             case "mask":
-                prompters.append(MaskPrompter())
+                prompters.append(MaskPrompter(annotation_every_n=4))
             case "random_point":
-                prompters.append(RandomPointPrompter())
+                prompters.append(RandomPointPrompter(annotation_every_n=4))
             case "consistent_point":
-                prompters.append(ConsistentPointPrompter())
+                prompters.append(ConsistentPointPrompter(annotation_every_n=4))
             case "k_consistent_point":
-                prompters.append(KConsistentPointPrompter())
+                prompters.append(
+                    KConsistentPointPrompter(annotation_every_n=4, k=9)
+                )
             case _:
                 raise ValueError(f"Unknown prompter name: {prompter_name}")
 
@@ -125,12 +132,6 @@ if __name__ == "__main__":
         required=True,
         help="Fold number for cross-validation",
     )
-    parser.add_argument(
-        "--model_cfg_name",
-        type=str,
-        default="sam2.1_hiera_s_MOSE_finetune.yaml",
-        help="Model configuration filename",
-    )
     args = parser.parse_args()
 
     # Get project root directory more reliably
@@ -142,12 +143,13 @@ if __name__ == "__main__":
     project_root = Path(__file__).resolve().parent.parent
 
     video_prompter = get_video_prompter(*args.prompter_names)
-    model_cfg_name = args.model_cfg_name
+    model_cfg_name = f"fold{args.fold}.yaml"
     run(
-        model_cfg=str(project_root / "configs/sam2.1/sam2.1_hiera_s.yaml"),
+        model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
         sam2_checkpoint=str(
             project_root
             / "sam2_logs/configs/sam2.1_training"
+            / "splits_final"
             / model_cfg_name
             / "checkpoints/checkpoint.pt"
         ),

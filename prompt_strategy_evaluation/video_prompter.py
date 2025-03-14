@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import numpy as np
+from tqdm import tqdm
 
-from prompt_strategy_evaluation.helper import color_pallete, load_ann_png
-from prompt_strategy_evaluation.prompter import MaskPrompter, Prompter
+from helper import color_pallete, load_ann_png
+from prompter import MaskPrompter, Prompter
 
 
 class VideoPrompter:
@@ -23,7 +24,7 @@ class VideoPrompter:
         video_length = len(list(video_length))
         prompts = []
         print("add_prompt/video_length", video_length)
-        for frame_idx in range(0, video_length):
+        for frame_idx in tqdm(range(0, video_length), desc="Adding prompts"):
             ann_obj_id = 1
             mask, palette = load_ann_png(f"{video_label}/{frame_idx:05}.png")
             mask_bool = np.all(
