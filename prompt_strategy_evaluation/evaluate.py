@@ -19,6 +19,7 @@ from helper import (
 from sam2.build_sam import build_sam2_video_predictor
 import argparse
 
+EVERY_N = 16
 
 def run(
     model_cfg: str,
@@ -55,9 +56,8 @@ def run(
         inference_state = predictor.init_state(video_path=video_dir)
 
         # Add mask every 4 frame
-        annotation_every_n = 4
         prompts = video_prompter.add_prompt(
-            video_label, predictor, inference_state, annotation_every_n
+            video_label, predictor, inference_state, EVERY_N
         )
 
         # Run inference
@@ -65,7 +65,7 @@ def run(
 
         # Save the results for later visualization
         prediction_output = Path(
-            f"./{output_name}_annotate_every_{annotation_every_n}/"
+            f"./{output_name}_annotate_every_{EVERY_N}/"
         )
         prediction_output.mkdir(exist_ok=True)
         torch.save(
@@ -77,7 +77,7 @@ def run(
         dice_with_masks, dice_without_masks = calcuate_dice_score(
             video_segments=video_segments,
             filename=filename,
-            annotation_every_n=annotation_every_n,
+            annotation_every_n=EVERY_NVERY_N,
         )
         resulting_dices_with_prompted_frames.append(dice_with_masks)
         resulting_dices_without_prompted_frames.append(dice_without_masks)
@@ -101,14 +101,14 @@ def get_video_prompter(*prompter_names: list[str]):
     for prompter_name in prompter_names:
         match prompter_name:
             case "mask":
-                prompters.append(MaskPrompter(annotation_every_n=4))
+                prompters.append(MaskPrompter(annotation_every_n=EVERY_N))
             case "random_point":
-                prompters.append(RandomPointPrompter(annotation_every_n=4))
+                prompters.append(RandomPointPrompter(annotation_every_n=EVERY_N))
             case "consistent_point":
-                prompters.append(ConsistentPointPrompter(annotation_every_n=4))
+                prompters.append(KConsistentPointPrompter(annotation_every_n=EVERY_N, k=0))
             case "k_consistent_point":
                 prompters.append(
-                    KConsistentPointPrompter(annotation_every_n=4, k=9)
+                    KConsistentPointPrompter(annotation_every_n=EVERY_N, k=9)
                 )
             case _:
                 raise ValueError(f"Unknown prompter name: {prompter_name}")
@@ -132,6 +132,12 @@ if __name__ == "__main__":
         required=True,
         help="Fold number for cross-validation",
     )
+    parser.add_argument(
+        "--mask_every_n",
+        type=int,
+        required=True,
+        help="Prompt mask every n frames, and prompt points in between",
+    )
     args = parser.parse_args()
 
     # Get project root directory more reliably
@@ -144,6 +150,9 @@ if __name__ == "__main__":
 
     video_prompter = get_video_prompter(*args.prompter_names)
     model_cfg_name = f"fold{args.fold}.yaml"
+    strategy_name = "::".join(sorted(args.prompter_names))
+
+    EVERY_N = args.mask_every_n
     run(
         model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
         sam2_checkpoint=str(
@@ -153,7 +162,7 @@ if __name__ == "__main__":
             / model_cfg_name
             / "checkpoints/checkpoint.pt"
         ),
-        output_name=f"{model_cfg_name[:-5]}",
+        output_name=f"{model_cfg_name[:-5]}_{strategy_name}",
         fold=args.fold,
         video_prompter=video_prompter,
     )
