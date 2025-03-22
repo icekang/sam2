@@ -105,11 +105,13 @@ def get_update_animation(
         EVERY_N,
     )
 
+def get_patients(fold: int):
+    splits, _, _ = get_splits()
+    patients = splits[fold]["val"]
+    return patients
 
 def create_videos(fold: int, prediction_output: Path, EVERY_N: int):
-    splits, image_dir, groundtruth_dir = get_splits()
-
-    patients = splits[fold]["val"]
+    patients = get_patients(fold)
 
     for patient_id in patients:
         prediction_dir = prediction_output
@@ -158,9 +160,9 @@ def get_show_annoation_function(
     """
     Returns a function that can be used to visualize the annotation of a patient."
     """
-    splits, image_dir, groundtruth_dir = get_splits()
-
-    patient_id = splits[fold]["val"][patient_idx]
+    # Get the patient id
+    patients = get_patients(fold)
+    patient_id = patients[patient_idx]
 
     # Load the predictions and prompts
     prediction_dir = prediction_output
