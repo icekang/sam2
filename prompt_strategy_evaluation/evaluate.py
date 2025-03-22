@@ -77,7 +77,7 @@ def run(
         dice_with_masks, dice_without_masks = calcuate_dice_score(
             video_segments=video_segments,
             filename=filename,
-            annotation_every_n=EVERY_NVERY_N,
+            annotation_every_n=EVERY_N,
         )
         resulting_dices_with_prompted_frames.append(dice_with_masks)
         resulting_dices_without_prompted_frames.append(dice_without_masks)
