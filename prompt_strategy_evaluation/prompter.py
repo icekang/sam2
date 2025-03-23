@@ -112,7 +112,8 @@ class KConsistentPointPrompter(Prompter):
         if is_first_frame_for_point_prompt or not self.prev_center_xy.size:
             center, _ = maximal_inscribed_circle(mask_bool)
             self.prev_center_xy = np.array([center])
-        else:  # if not the first frame, we should add points prompts
+        
+        if not is_first_frame_for_point_prompt:  # if not the first frame, we should add points prompts
             n_sample_points = min(self.k, len(mask_coords))
             n_positive_prompts = self.prev_positive_prompts_yx.shape[0]
             positive_prompts_yx = np.array(
