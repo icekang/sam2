@@ -19,3 +19,11 @@ notebooks/finetuned_small*/
 notebooks/small_annotate_every_8/
 *ipynb_checkpoints/
 demo/backend/checkpoints/*.pt
+
+# Visualization prompting strategy
+prompt_strategy_evaluation/fold*/**/*.pt
+prompt_strategy_evaluation/fold*/**/*.mp4
+prompt_strategy_evaluation/sdf*/**/*.pt
+prompt_strategy_evaluation/sdf*/**/*.npz
+# Visualization log
+prompt_strategy_evaluation/**/*.log-*
