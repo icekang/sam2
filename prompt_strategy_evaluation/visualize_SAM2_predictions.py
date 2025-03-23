@@ -193,6 +193,12 @@ def aggregate_prompts(prompts: list[dict]) -> dict:
     return aggregated_prompts
 
 
+def get_prediction_output(fold: int, strategy_name: str, EVERY_N: int) -> Path:
+    """
+    Get the prediction output name.
+    """
+    return Path(f"fold{fold}_{strategy_name}_annotate_every_{EVERY_N}")
+
 def get_show_annoation_function(
     fold: int, prediction_output: Path, patient_idx: int, EVERY_N: int
 ) -> tuple[Callable, plt.Figure, plt.Axes]:
