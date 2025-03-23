@@ -1,14 +1,7 @@
+import argparse
 from pathlib import Path
 
 import torch
-from video_prompter import VideoPrompter
-from prompter import (
-    MaskPrompter,
-    KNegativeConsistentPointsPrompter,
-    KConsistentPointPrompter,
-    RandomPointPrompter,
-)
-
 from helper import (
     calcuate_dice_score,
     get_negative_video_label,
@@ -17,8 +10,16 @@ from helper import (
     get_video_label,
     run_propagation,
 )
+from prompter import (
+    KBorderPointsPrompter,
+    KConsistentPointPrompter,
+    KNegativeConsistentPointsPrompter,
+    MaskPrompter,
+    RandomPointPrompter,
+)
+from video_prompter import VideoPrompter
+
 from sam2.build_sam import build_sam2_video_predictor
-import argparse
 
 EVERY_N = 16
 
@@ -122,6 +123,12 @@ def get_video_prompter(*prompter_names: list[str]):
                 prompters.append(
                     KNegativeConsistentPointsPrompter(
                         annotation_every_n=EVERY_N, k=19
+                    )
+                )
+            case "k_border":
+                prompters.append(
+                    KBorderPointsPrompter(
+                        annotation_every_n=EVERY_N, pos_k=9, neg_k=19
                     )
                 )
             case _:

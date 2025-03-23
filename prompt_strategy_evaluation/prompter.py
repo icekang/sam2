@@ -64,10 +64,25 @@ class KConsistentPointPrompter(Prompter):
         self.prev_center_xy = np.ndarray(
             shape=(0, 2), dtype=np.int32
         )  # when not empty : 1x2
-        self.prev_positive_prompts_yx = np.ndarray(
+        self.prev_prompts_yx = np.ndarray(
             shape=(0, 2), dtype=np.int32
         )  # when not empty : kx2
         self.k = k
+
+    def process_prev_points(self, mask_bool):
+        """Process the previous points to keep those inside the mask.
+
+        This allows point prompts to be consistent and not be outside the mask.
+
+        Args:
+            neg_mask_bool (npt.NDArray): The negative mask boolean array.
+        """
+        self.prev_center_xy = filter_points_outside_mask(
+            self.prev_center_xy[:, ::-1], mask_bool
+        )[:, ::-1]
+        self.prev_prompts_yx = filter_points_outside_mask(
+            self.prev_prompts_yx, mask_bool
+        )
 
     def add_prompt(
         self,
@@ -91,21 +106,15 @@ class KConsistentPointPrompter(Prompter):
         ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
         mask_coords = np.argwhere(mask_bool)
-        self.prev_center_xy = filter_points_outside_mask(
-            self.prev_center_xy[:, ::-1], mask_bool
-        )[:, ::-1]
-        self.prev_positive_prompts_yx = filter_points_outside_mask(
-            self.prev_positive_prompts_yx, mask_bool
-        )
+
+        self.process_prev_points(mask_bool)
 
         no_positive_points_in_mask = len(mask_coords) == 0
         if no_positive_points_in_mask:
             # Reset the center to empty 2d array
             self.prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
             # Reset the other positive prompts to empty 2d array
-            self.prev_positive_prompts_yx = np.ndarray(
-                shape=(0, 2), dtype=np.int32
-            )
+            self.prev_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
             return None
 
         is_first_frame_for_point_prompt = (
@@ -115,11 +124,12 @@ class KConsistentPointPrompter(Prompter):
             center, _ = maximal_inscribed_circle(mask_bool)
             self.prev_center_xy = np.array([center])
 
+        # TODO: should we even check for the first frame? we always need to add points prompts
         if (
             not is_first_frame_for_point_prompt
         ):  # if not the first frame, we should add points prompts
             n_sample_points = min(self.k, len(mask_coords))
-            n_positive_prompts = self.prev_positive_prompts_yx.shape[0]
+            n_positive_prompts = self.prev_prompts_yx.shape[0]
             positive_prompts_yx = np.array(
                 random.choices(
                     mask_coords, k=n_sample_points - n_positive_prompts
@@ -127,16 +137,14 @@ class KConsistentPointPrompter(Prompter):
                 dtype=np.int32,
             )
             positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
-            self.prev_positive_prompts_yx = np.concatenate(
-                [self.prev_positive_prompts_yx, positive_prompts_yx], axis=0
+            self.prev_prompts_yx = np.concatenate(
+                [self.prev_prompts_yx, positive_prompts_yx], axis=0
             )
 
         points = np.concatenate(
             [
                 self.prev_center_xy,
-                self.prev_positive_prompts_yx[
-                    :, ::-1
-                ],  # convert from (y, x) to (x, y)
+                self.prev_prompts_yx[:, ::-1],  # convert from (y, x) to (x, y)
             ],
             axis=0,
         )
@@ -178,16 +186,33 @@ class RandomPointPrompter(Prompter):
         return {"type": "point", "frame": frame_idx, "points": random_point}
 
 
-class KNegativeConsistentPointsPrompter(Prompter):
+class KNegativeConsistentPointsPrompter(KConsistentPointPrompter):
     def __init__(self, annotation_every_n: int, k=10):
-        super().__init__(annotation_every_n)
+        super().__init__(annotation_every_n, k)
         self.prev_center_xy = np.ndarray(
             shape=(0, 2), dtype=np.int32
         )  # when not empty : 1x2
-        self.prev_neg_prompts_yx = np.ndarray(
+        self.prev_prompts_yx = np.ndarray(
             shape=(0, 2), dtype=np.int32
         )  # when not empty : kx2
         self.k = k
+
+    def is_no_negative_points_in_mask(self, mask_coords):
+        return len(mask_coords) == 0
+
+    def should_add_point_prompt(self, frame_idx):
+        return frame_idx % self.annotation_every_n != 0
+
+    def should_skip(self, mask_coords, frame_idx):
+        return self.is_no_negative_points_in_mask(
+            mask_coords
+        ) or not self.should_add_point_prompt(frame_idx)
+
+    def reset_prev_points(self):
+        # Reset the center to empty 2d array
+        self.prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+        # Reset the other positive prompts to empty 2d array
+        self.prev_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
 
     def add_prompt(
         self,
@@ -205,30 +230,16 @@ class KNegativeConsistentPointsPrompter(Prompter):
         Pick a new point prompt every first frame of annotation.
         """
         mask_coords = np.argwhere(neg_mask_bool)
-        if len(mask_coords) == 0:
-            return None
-
-        should_add_point_prompt = frame_idx % self.annotation_every_n != 0
-        if not should_add_point_prompt:
+        if self.should_skip(mask_coords, frame_idx):
             return None
 
         ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
-        self.prev_center_xy = filter_points_outside_mask(
-            self.prev_center_xy[:, ::-1], neg_mask_bool
-        )[:, ::-1]
-        self.prev_neg_prompts_yx = filter_points_outside_mask(
-            self.prev_neg_prompts_yx, neg_mask_bool
-        )
+        self.process_prev_points(neg_mask_bool)
 
         no_neg_points_in_mask = len(mask_coords) == 0
         if no_neg_points_in_mask:
-            # Reset the center to empty 2d array
-            self.prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
-            # Reset the other positive prompts to empty 2d array
-            self.prev_neg_prompts_yx = np.ndarray(
-                shape=(0, 2), dtype=np.int32
-            )
+            self.reset_prev_points()
             return None
 
         is_first_frame_for_point_prompt = (
@@ -238,11 +249,12 @@ class KNegativeConsistentPointsPrompter(Prompter):
             center, _ = maximal_inscribed_circle(neg_mask_bool)
             self.prev_center_xy = np.array([center])
 
+        # TODO: should we even check for the first frame? we always need to add points prompts
         if (
             not is_first_frame_for_point_prompt
         ):  # if not the first frame, we should add points prompts
             n_sample_points = min(self.k, len(mask_coords))
-            n_positive_prompts = self.prev_neg_prompts_yx.shape[0]
+            n_positive_prompts = self.prev_prompts_yx.shape[0]
             positive_prompts_yx = np.array(
                 random.choices(
                     mask_coords, k=n_sample_points - n_positive_prompts
@@ -250,16 +262,14 @@ class KNegativeConsistentPointsPrompter(Prompter):
                 dtype=np.int32,
             )
             positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
-            self.prev_neg_prompts_yx = np.concatenate(
-                [self.prev_neg_prompts_yx, positive_prompts_yx], axis=0
+            self.prev_prompts_yx = np.concatenate(
+                [self.prev_prompts_yx, positive_prompts_yx], axis=0
             )
 
         points = np.concatenate(
             [
                 self.prev_center_xy,
-                self.prev_neg_prompts_yx[
-                    :, ::-1
-                ],  # convert from (y, x) to (x, y)
+                self.prev_prompts_yx[:, ::-1],  # convert from (y, x) to (x, y)
             ],
             axis=0,
         )
@@ -270,6 +280,228 @@ class KNegativeConsistentPointsPrompter(Prompter):
 
         self.prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
         return {"type": "point", "frame": frame_idx, "neg_points": points}
+
+
+class KBorderPointsPrompter(Prompter):
+    """A prompter that prompts negative points on the border of the mask."""
+
+    def __init__(self, annotation_every_n: int, pos_k=10, neg_k=10):
+        super().__init__(annotation_every_n)
+
+        # Consistent positive points
+        self.prev_pos_center_xy = np.ndarray(
+            shape=(0, 2), dtype=np.int32
+        )  # when not empty : 1x2
+        self.prev_pos_prompts_yx = np.ndarray(
+            shape=(0, 2), dtype=np.int32
+        )  # when not empty : (pos_k-1)x2
+        self.pos_k = pos_k
+
+        # Consistent negative points
+        self.prev_neg_center_xy = np.ndarray(
+            shape=(0, 2), dtype=np.int32
+        )  # when not empty : 1x2
+        self.prev_neg_prompts_yx = np.ndarray(
+            shape=(0, 2), dtype=np.int32
+        )  # when not empty : (neg_k-1)x2
+        self.neg_k = neg_k
+
+    def process_prev_points(self, mask_bool, prev_center_xy, prev_prompts_yx):
+        """Process the previous points to keep those inside the mask.
+
+        This allows point prompts to be consistent and not be outside the mask.
+
+        Args:
+            neg_mask_bool (npt.NDArray): The negative mask boolean array.
+        """
+        if prev_center_xy.size:
+            prev_center_xy = filter_points_outside_mask(
+                prev_center_xy[:, ::-1], mask_bool
+            )[:, ::-1]
+        if prev_prompts_yx.size:
+            prev_prompts_yx = filter_points_outside_mask(
+                prev_prompts_yx, mask_bool
+            )
+        return prev_center_xy, prev_prompts_yx
+
+    def process_negative_prompts(
+        self,
+        border_coords: npt.NDArray,
+        neg_mask_bool: npt.NDArray,
+    ):
+        """Get negative prompts on the border of the mask."""
+        # Keep only the points that are inside the mask
+        self.prev_neg_center_xy, self.prev_neg_prompts_yx = (
+            self.process_prev_points(
+                neg_mask_bool, self.prev_neg_center_xy, self.prev_neg_prompts_yx
+            )
+        )
+
+        no_neg_points_in_mask = neg_mask_bool.sum() == 0
+        if no_neg_points_in_mask:
+            # Reset the center to empty 2d array
+            self.prev_neg_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+            # Reset the other positive prompts to empty 2d array
+            self.prev_neg_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
+            return None
+
+        # Center
+        if not self.prev_neg_center_xy.size:
+            center, _ = maximal_inscribed_circle(neg_mask_bool)
+            self.prev_neg_center_xy = np.array([center])
+
+        # Prompts
+        n_sample_points = min(self.neg_k, len(border_coords))
+        n_neg_prompts = self.prev_neg_prompts_yx.shape[0]
+        positive_prompts_yx = np.array(
+            random.choices(border_coords, k=n_sample_points - n_neg_prompts),
+            dtype=np.int32,
+        )
+        positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
+        self.prev_neg_prompts_yx = np.concatenate(
+            [self.prev_neg_prompts_yx, positive_prompts_yx], axis=0
+        )
+
+    def process_positive_prompts(
+        self,
+        border_coords: npt.NDArray,
+        pos_mask_bool: npt.NDArray,
+    ):
+        """Get positive prompts on the border of the mask."""
+        # Keep only the points that are inside the mask
+        self.prev_pos_center_xy, self.prev_pos_prompts_yx = (
+            self.process_prev_points(
+                pos_mask_bool, self.prev_pos_center_xy, self.prev_pos_prompts_yx
+            )
+        )
+
+        no_pos_points_in_mask = pos_mask_bool.sum() == 0
+        if no_pos_points_in_mask:
+            # Reset the center to empty 2d array
+            self.prev_pos_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+            # Reset the other positive prompts to empty 2d array
+            self.prev_pos_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
+            return None
+
+        # Center
+        if not self.prev_pos_center_xy.size:
+            center, _ = maximal_inscribed_circle(pos_mask_bool)
+            self.prev_pos_center_xy = np.array([center])
+
+        # Prompts
+        n_sample_points = min(self.pos_k, len(border_coords))
+        n_pos_prompts = self.prev_pos_prompts_yx.shape[0]
+        positive_prompts_yx = np.array(
+            random.choices(border_coords, k=n_sample_points - n_pos_prompts),
+            dtype=np.int32,
+        )
+        positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
+        self.prev_pos_prompts_yx = np.concatenate(
+            [self.prev_pos_prompts_yx, positive_prompts_yx], axis=0
+        )
+
+    def add_prompt(
+        self,
+        predictor,
+        inference_state,
+        frame_idx: int,
+        ann_obj_id: int,
+        mask_bool: npt.NDArray,
+        neg_mask_bool: npt.NDArray,
+    ):
+        """Add negative consistent point prompts.
+
+        This method saves `prev_point` which is the point prompted in the previous frame (i.e. frame_idx - 1).
+
+        Pick a new point prompt every first frame of annotation.
+        """
+
+        # Make sure the border is not too close to the edge
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        neg_mask_bool = cv2.erode(
+            neg_mask_bool.astype(np.uint8), kernel, iterations=1
+        ).astype(np.bool)
+
+        # Get the border of the negative mask next to the positive mask
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+        dilated_mask = cv2.dilate(
+            mask_bool.astype(np.uint8), kernel, iterations=1
+        )  # Enlarge the positive mask
+        border = cv2.bitwise_and(
+            dilated_mask, neg_mask_bool.astype(np.uint8)
+        )  # Get the border of the negative mask next to the positive mask
+        border_coords = np.argwhere(border)
+        if len(border_coords) != 0:
+            self.process_negative_prompts(
+                border_coords=border_coords, neg_mask_bool=neg_mask_bool
+            )
+
+        # Get the border of the positive mask
+        pos_border = cv2.Canny(mask_bool.astype(np.uint8), 0, 1)
+        pos_border_coords = np.argwhere(pos_border)
+        if len(pos_border_coords) != 0:
+            self.process_positive_prompts(
+                border_coords=pos_border_coords, pos_mask_bool=mask_bool
+            )
+
+        # Prompt
+        final_prompt = {
+            "type": "point",
+            "frame": frame_idx,
+        }
+        if (
+            not self.prev_neg_center_xy.size
+            and not self.prev_neg_prompts_yx.size
+            and not self.prev_pos_center_xy.size
+            and not self.prev_pos_prompts_yx.size
+        ):
+            return None
+
+        # Add the negative prompts
+        if self.prev_neg_center_xy.size or self.prev_neg_prompts_yx.size:
+            neg_points = np.concatenate(
+                [
+                    self.prev_neg_center_xy,
+                    self.prev_pos_center_xy[
+                        :, ::-1
+                    ],  # convert from (y, x) to (x, y)
+                ],
+                axis=0,
+            )
+            neg_labels = np.zeros(neg_points.shape[0], dtype=np.int32)
+            add_point_prompts(
+                predictor=predictor,
+                inference_state=inference_state,
+                ann_obj_id=ann_obj_id,
+                frame_index=frame_idx,
+                points=neg_points,
+                labels=neg_labels,
+            )
+            final_prompt["neg_points"] = neg_points
+
+        if self.prev_pos_center_xy.size or self.prev_pos_prompts_yx.size:
+            # Add the positive prompts
+            pos_points = np.concatenate(
+                [
+                    self.prev_pos_center_xy,
+                    self.prev_pos_prompts_yx[
+                        :, ::-1
+                    ],  # convert from (y, x) to (x, y)
+                ],
+                axis=0,
+            )
+            pos_labels = np.ones(pos_points.shape[0], dtype=np.int32)
+            add_point_prompts(
+                predictor=predictor,
+                inference_state=inference_state,
+                ann_obj_id=ann_obj_id,
+                frame_index=frame_idx,
+                points=pos_points,
+                labels=pos_labels,
+            )
+            final_prompt["points"] = pos_points
+        return final_prompt
+
 
 class MaskPrompter(Prompter):
     def add_prompt(
