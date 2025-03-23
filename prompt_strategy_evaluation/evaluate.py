@@ -121,7 +121,7 @@ def get_video_prompter(*prompter_names: list[str]):
             case "k_neg_consistent_point":
                 prompters.append(
                     KNegativeConsistentPointsPrompter(
-                        annotation_every_n=EVERY_N, k=99
+                        annotation_every_n=EVERY_N, k=19
                     )
                 )
             case _:
@@ -138,7 +138,7 @@ if __name__ == "__main__":
         "--prompter_names",
         nargs="+",
         required=True,
-        help="List of prompter names to use (e.g., mask, random_point, consistent_point, k_consistent_point)",
+        help="List of prompter names to use (e.g., mask, random_point, consistent_point, k_consistent_point, k_neg_consistent_point)",
     )
     parser.add_argument(
         "--fold",
@@ -153,11 +153,6 @@ if __name__ == "__main__":
         help="Prompt mask every n frames, and prompt points in between",
     )
     args = parser.parse_args()
-
-    # Get project root directory more reliably
-    project_root = Path(__file__).resolve().parent.parent
-
-    video_prompter = get_video_prompter(*args.prompter_names)
 
     # Get project root directory more reliably
     project_root = Path(__file__).resolve().parent.parent

@@ -205,7 +205,7 @@ class KNegativeConsistentPointsPrompter(Prompter):
         Pick a new point prompt every first frame of annotation.
         """
         mask_coords = np.argwhere(neg_mask_bool)
-        if len(mask_coords) != 0:
+        if len(mask_coords) == 0:
             return None
 
         should_add_point_prompt = frame_idx % self.annotation_every_n != 0
@@ -269,7 +269,7 @@ class KNegativeConsistentPointsPrompter(Prompter):
         )
 
         self.prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
-        return {"type": "point", "frame": frame_idx, "points": points}
+        return {"type": "point", "frame": frame_idx, "neg_points": points}
 
 class MaskPrompter(Prompter):
     def add_prompt(

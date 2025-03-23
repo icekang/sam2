@@ -85,14 +85,24 @@ def draw_prompts(ax: plt.axes, prompts: list[dict]):
         if prompt_type == "mask":
             pass
         elif prompt_type == "point":
-            points_xy = prompt["points"]
-            N, two = points_xy.shape
-            ax_2_output = show_points(
-                coords=points_xy,
-                labels=np.array([1] * N),
-                ax=ax[2],
-                marker_size=200,
-            )
+            if "neg_points" in prompt:
+                neg_points_xy = prompt["neg_points"]
+                N, two = neg_points_xy.shape
+                show_points(
+                    coords=neg_points_xy,
+                    labels=np.array([0] * N),
+                    ax=ax[2],
+                    marker_size=50,
+                )
+            if "points" in prompt:
+                points_xy = prompt["points"]
+                N, two = points_xy.shape
+                ax_2_output = show_points(
+                    coords=points_xy,
+                    labels=np.array([1] * N),
+                    ax=ax[2],
+                    marker_size=50,
+                )
 
 
 def get_update_animation(
