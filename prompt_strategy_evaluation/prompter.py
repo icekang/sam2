@@ -82,7 +82,6 @@ class KConsistentPointPrompter(Prompter):
 
         Pick a new point prompt every first frame of annotation.
         """
-        prompts = []
         should_add_point_prompt = frame_idx % self.annotation_every_n != 0
         if not should_add_point_prompt:
             return None
@@ -140,10 +139,9 @@ class KConsistentPointPrompter(Prompter):
         add_point_prompts(
             predictor, inference_state, ann_obj_id, frame_idx, points, labels
         )
-        prompts.append({"type": "point", "frame": frame_idx, "points": points})
 
         self.prev_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
-        return prompts
+        return {"type": "point", "frame": frame_idx, "points": points}
 
 
 class ConsistentPointPrompter(KConsistentPointPrompter):

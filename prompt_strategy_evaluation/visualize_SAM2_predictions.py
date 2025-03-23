@@ -2,6 +2,7 @@ import argparse
 from functools import partial
 from pathlib import Path
 from typing import Callable
+from warnings import deprecated
 import torch
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -70,7 +71,16 @@ def update_animation_full(
 
     ax_2_output = ax[2].imshow(prediction)
     if frame in frame_idx2prompt:
-        prompt = frame_idx2prompt[frame]
+        prompts = frame_idx2prompt[frame]
+        draw_prompts(ax, prompts)
+    return ax[0].imshow(new_image), ax[1].imshow(gt), ax_2_output
+
+
+def draw_prompts(ax: plt.axes, prompts: list[dict]):
+    """
+    Draw prompts on the axes.
+    """
+    for prompt in prompts:
         prompt_type = prompt["type"]
         if prompt_type == "mask":
             pass
@@ -83,7 +93,6 @@ def update_animation_full(
                 ax=ax[2],
                 marker_size=200,
             )
-    return ax[0].imshow(new_image), ax[1].imshow(gt), ax_2_output
 
 
 def get_update_animation(
@@ -105,20 +114,21 @@ def get_update_animation(
         EVERY_N,
     )
 
+
 def get_patients(fold: int):
     splits, _, _ = get_splits()
     patients = splits[fold]["val"]
     return patients
 
+
 def create_videos(fold: int, prediction_output: Path, EVERY_N: int):
     patients = get_patients(fold)
 
     for patient_id in patients:
-        prediction_dir = prediction_output
-        prediction_path = prediction_dir / f"video_segments_{patient_id}.pt"
+        prediction_path = prediction_output / f"video_segments_{patient_id}.pt"
         predictions = torch.load(prediction_path, weights_only=False)
 
-        prompt_path = prediction_dir / f"prompts_{patient_id}.pt"
+        prompt_path = prediction_output / f"prompts_{patient_id}.pt"
         prompts = torch.load(prompt_path, weights_only=False)
         frame_idx2prompt = {prompt["frame"]: prompt for prompt in prompts}
 
@@ -154,6 +164,35 @@ def create_videos(fold: int, prediction_output: Path, EVERY_N: int):
         )
 
 
+@deprecated("Will be removed in the future when the prompter is fixed.")
+def _prompt_list_to_dict(prompts: list[dict]) -> dict:
+    """
+    Convert a list of prompts to a dictionary.
+    """
+    if isinstance(prompts, dict):
+        return prompts
+
+    if len(prompts) != 1:
+        raise ValueError("Only one prompt per frame is supported.")
+
+    prompt = prompts[0]
+    return prompt
+
+
+def aggregate_prompts(prompts: list[dict]) -> dict:
+    """
+    Aggregate prompts into a single dictionary.
+    """
+    aggregated_prompts = {}
+    for prompt in prompts:
+        prompt = _prompt_list_to_dict(prompt)
+        frame = prompt["frame"]
+        if frame not in aggregated_prompts:
+            aggregated_prompts[frame] = []
+        aggregated_prompts[frame].append(prompt)
+    return aggregated_prompts
+
+
 def get_show_annoation_function(
     fold: int, prediction_output: Path, patient_idx: int, EVERY_N: int
 ) -> tuple[Callable, plt.Figure, plt.Axes]:
@@ -165,16 +204,15 @@ def get_show_annoation_function(
     patient_id = patients[patient_idx]
 
     # Load the predictions and prompts
-    prediction_dir = prediction_output
-    prediction_path = prediction_dir / f"video_segments_{patient_id}.pt"
+    prediction_path = prediction_output / f"video_segments_{patient_id}.pt"
     predictions = torch.load(prediction_path, weights_only=False)
 
     # Load the prompts
-    prompt_path = prediction_dir / f"prompts_{patient_id}.pt"
+    prompt_path = prediction_output / f"prompts_{patient_id}.pt"
     prompts = torch.load(prompt_path, weights_only=False)
 
     # Create a dictionary that maps frame index to prompt
-    frame_idx2prompt = {prompt["frame"]: prompt for prompt in prompts}
+    frame_idx2prompt = aggregate_prompts(prompts)
 
     # Load the groundtruth and image paths
     groundtruth_path = Path(get_video_label(patient_id))
