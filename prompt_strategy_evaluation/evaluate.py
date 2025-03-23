@@ -21,6 +21,7 @@ import argparse
 
 EVERY_N = 16
 
+
 def run(
     model_cfg: str,
     sam2_checkpoint: str,
@@ -57,16 +58,14 @@ def run(
 
         # Add mask every 4 frame
         prompts = video_prompter.add_prompt(
-            video_label, predictor, inference_state, EVERY_N
+            video_label, predictor, inference_state
         )
 
         # Run inference
         video_segments = run_propagation(predictor, inference_state)
 
         # Save the results for later visualization
-        prediction_output = Path(
-            f"./{output_name}_annotate_every_{EVERY_N}/"
-        )
+        prediction_output = Path(f"./{output_name}_annotate_every_{EVERY_N}/")
         prediction_output.mkdir(exist_ok=True)
         torch.save(
             video_segments, prediction_output / f"video_segments_{filename}.pt"
@@ -103,9 +102,13 @@ def get_video_prompter(*prompter_names: list[str]):
             case "mask":
                 prompters.append(MaskPrompter(annotation_every_n=EVERY_N))
             case "random_point":
-                prompters.append(RandomPointPrompter(annotation_every_n=EVERY_N))
+                prompters.append(
+                    RandomPointPrompter(annotation_every_n=EVERY_N)
+                )
             case "consistent_point":
-                prompters.append(KConsistentPointPrompter(annotation_every_n=EVERY_N, k=0))
+                prompters.append(
+                    KConsistentPointPrompter(annotation_every_n=EVERY_N, k=0)
+                )
             case "k_consistent_point":
                 prompters.append(
                     KConsistentPointPrompter(annotation_every_n=EVERY_N, k=9)

@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from helper import color_pallete, load_ann_png
-from prompter import MaskPrompter, Prompter
+from prompter import Prompter
 
 
 class VideoPrompter:
@@ -18,7 +18,6 @@ class VideoPrompter:
         video_label: str,
         predictor,
         inference_state,
-        annotation_every_n: int,
     ) -> list:
         video_length = Path(video_label).glob("*.png")
         video_length = len(list(video_length))
