@@ -191,6 +191,9 @@ def get_video_label(filename: str):
     video_label = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTr/{filename}"
     return video_label
 
+def get_negative_video_label(filename: str):
+    video_label = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/LaW_predictions/{filename}"
+    return video_label
 
 def calcuate_dice_score(
     video_segments: dict, filename: str, annotation_every_n: int

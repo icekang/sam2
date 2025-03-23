@@ -4,13 +4,14 @@ import torch
 from video_prompter import VideoPrompter
 from prompter import (
     MaskPrompter,
-    ConsistentPointPrompter,
+    KNegativeConsistentPointsPrompter,
     KConsistentPointPrompter,
     RandomPointPrompter,
 )
 
 from helper import (
     calcuate_dice_score,
+    get_negative_video_label,
     get_splits,
     get_video_dir,
     get_video_label,
@@ -52,13 +53,17 @@ def run(
         # Load the image
         video_dir = get_video_dir(filename=filename)
         video_label = get_video_label(filename=filename)
+        neg_video_label = get_negative_video_label(filename=filename)
         print("Processing", filename)
         print(video_dir)
         inference_state = predictor.init_state(video_path=video_dir)
 
-        # Add mask every 4 frame
+        # Add mask every EVERY_N frame
         prompts = video_prompter.add_prompt(
-            video_label, predictor, inference_state
+            video_label=video_label,
+            neg_video_label=neg_video_label,
+            predictor=predictor,
+            inference_state=inference_state,
         )
 
         # Run inference
@@ -112,6 +117,12 @@ def get_video_prompter(*prompter_names: list[str]):
             case "k_consistent_point":
                 prompters.append(
                     KConsistentPointPrompter(annotation_every_n=EVERY_N, k=9)
+                )
+            case "k_neg_consistent_point":
+                prompters.append(
+                    KNegativeConsistentPointsPrompter(
+                        annotation_every_n=EVERY_N, k=99
+                    )
                 )
             case _:
                 raise ValueError(f"Unknown prompter name: {prompter_name}")
