@@ -140,7 +140,7 @@ def create_videos(fold: int, prediction_output: Path, EVERY_N: int):
 
         prompt_path = prediction_output / f"prompts_{patient_id}.pt"
         prompts = torch.load(prompt_path, weights_only=False)
-        frame_idx2prompt = {prompt["frame"]: prompt for prompt in prompts}
+        frame_idx2prompt = aggregate_prompts(prompts)
 
         groundtruth_path = Path(get_video_label(patient_id))
         image_path = Path(get_video_dir(patient_id))
@@ -161,6 +161,7 @@ def create_videos(fold: int, prediction_output: Path, EVERY_N: int):
             frame_idx2prompt=frame_idx2prompt,
             image_paths=image_paths,
             groundtruth_paths=groundtruth_paths,
+            EVERY_N=EVERY_N,
         )
 
         update_animation(0)
