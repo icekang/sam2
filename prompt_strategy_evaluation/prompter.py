@@ -419,13 +419,13 @@ class KBorderPointsPrompter(Prompter):
         # Make sure the border is not too close to the edge
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         neg_mask_bool = cv2.erode(
-            neg_mask_bool.astype(np.uint8), kernel, iterations=1
+            neg_mask_bool.astype(np.uint8), kernel, iterations=3
         ).astype(np.bool)
 
         # Get the border of the negative mask next to the positive mask
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         dilated_mask = cv2.dilate(
-            mask_bool.astype(np.uint8), kernel, iterations=1
+            mask_bool.astype(np.uint8), kernel, iterations=10
         )  # Enlarge the positive mask
         border = cv2.bitwise_and(
             dilated_mask, neg_mask_bool.astype(np.uint8)
@@ -437,12 +437,23 @@ class KBorderPointsPrompter(Prompter):
             )
 
         # Get the border of the positive mask
-        pos_border = cv2.Canny(mask_bool.astype(np.uint8), 0, 1)
-        pos_border_coords = np.argwhere(pos_border)
-        if len(pos_border_coords) != 0:
+        # pos_border = cv2.Canny(mask_bool.astype(np.uint8), 0, 1)
+        # pos_border_coords = np.argwhere(pos_border)
+        pos_coords = np.argwhere(mask_bool)
+        if len(pos_coords) != 0:
             self.process_positive_prompts(
-                border_coords=pos_border_coords, pos_mask_bool=mask_bool
+                border_coords=pos_coords, pos_mask_bool=mask_bool
             )
+
+        # Reset the prev pos and neg points if there are no points in the mask
+        mask_coords = np.argwhere(mask_bool)
+        no_points_in_mask = len(mask_coords) == 0
+        if no_points_in_mask:
+            self.prev_pos_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+            self.prev_pos_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
+            self.prev_neg_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+            self.prev_neg_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
+            return None
 
         # Prompt
         final_prompt = {
