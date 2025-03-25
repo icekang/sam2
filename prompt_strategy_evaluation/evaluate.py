@@ -12,6 +12,7 @@ from helper import (
 )
 from prompter import (
     KBorderPointsPrompter,
+    KBorderPointsPrompterV2,
     KConsistentPointPrompter,
     KNegativeConsistentPointsPrompter,
     MaskPrompter,
@@ -129,6 +130,12 @@ def get_video_prompter(*prompter_names: list[str]):
                 prompters.append(
                     KBorderPointsPrompter(
                         annotation_every_n=EVERY_N, pos_k=9, neg_k=19
+                    )
+                )
+            case "k_border_2":
+                prompters.append(
+                    KBorderPointsPrompterV2(
+                        annotation_every_n=EVERY_N, pos_k=9, neg_k=9
                     )
                 )
             case _:
