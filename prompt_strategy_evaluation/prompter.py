@@ -353,13 +353,14 @@ class KBorderPointsPrompter(Prompter):
         # Prompts
         n_sample_points = min(self.neg_k, len(border_coords))
         n_neg_prompts = self.prev_neg_prompts_yx.shape[0]
-        positive_prompts_yx = np.array(
+        neg_prompts_yx = np.array(
             random.choices(border_coords, k=n_sample_points - n_neg_prompts),
             dtype=np.int32,
         )
-        positive_prompts_yx = positive_prompts_yx.reshape(-1, 2)
+
+        neg_prompts_yx = neg_prompts_yx.reshape(-1, 2)
         self.prev_neg_prompts_yx = np.concatenate(
-            [self.prev_neg_prompts_yx, positive_prompts_yx], axis=0
+            [self.prev_neg_prompts_yx, neg_prompts_yx], axis=0
         )
 
     def process_positive_prompts(
@@ -473,7 +474,7 @@ class KBorderPointsPrompter(Prompter):
             neg_points = np.concatenate(
                 [
                     self.prev_neg_center_xy,
-                    self.prev_pos_center_xy[
+                    self.prev_neg_prompts_yx[
                         :, ::-1
                     ],  # convert from (y, x) to (x, y)
                 ],
@@ -513,6 +514,7 @@ class KBorderPointsPrompter(Prompter):
             final_prompt["points"] = pos_points
         return final_prompt
 
+
 class KBorderPointsPrompterV2(KBorderPointsPrompter):
     def __init__(self, annotation_every_n: int, pos_k=10, neg_k=10):
         """Enfore positive and negative points to be next to each other."""
@@ -538,13 +540,19 @@ class KBorderPointsPrompterV2(KBorderPointsPrompter):
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         dilated_mask = cv2.dilate(
             mask_bool.astype(np.uint8), kernel, iterations=15
-        ).astype(np.bool)  # Enlarge the positive mask
+        ).astype(
+            np.bool
+        )  # Enlarge the positive mask
         dilated_dilated_mask = cv2.dilate(
             dilated_mask.astype(np.uint8), kernel, iterations=15
-        ).astype(np.bool)  # Enlarge the positive mask
+        ).astype(
+            np.bool
+        )  # Enlarge the positive mask
 
-        neg_border = dilated_dilated_mask & dilated_mask
-        neg_border = neg_border & neg_mask_bool # Ensure that dilated masks are in the negative mask
+        neg_border = dilated_dilated_mask & ~dilated_mask
+        neg_border = (
+            neg_border & neg_mask_bool
+        )  # Ensure that dilated masks are in the negative mask
 
         neg_border_coords = np.argwhere(neg_border)
         if len(neg_border_coords) != 0:
@@ -592,12 +600,145 @@ class KBorderPointsPrompterV2(KBorderPointsPrompter):
             neg_points = np.concatenate(
                 [
                     self.prev_neg_center_xy,
-                    self.prev_pos_center_xy[
+                    self.prev_neg_prompts_yx[
                         :, ::-1
                     ],  # convert from (y, x) to (x, y)
                 ],
                 axis=0,
             )
+            neg_labels = np.zeros(neg_points.shape[0], dtype=np.int32)
+            add_point_prompts(
+                predictor=predictor,
+                inference_state=inference_state,
+                ann_obj_id=ann_obj_id,
+                frame_index=frame_idx,
+                points=neg_points,
+                labels=neg_labels,
+            )
+            final_prompt["neg_points"] = neg_points
+
+        if self.prev_pos_center_xy.size or self.prev_pos_prompts_yx.size:
+            # Add the positive prompts
+            pos_points = np.concatenate(
+                [
+                    self.prev_pos_center_xy,
+                    self.prev_pos_prompts_yx[
+                        :, ::-1
+                    ],  # convert from (y, x) to (x, y)
+                ],
+                axis=0,
+            )
+            pos_labels = np.ones(pos_points.shape[0], dtype=np.int32)
+            add_point_prompts(
+                predictor=predictor,
+                inference_state=inference_state,
+                ann_obj_id=ann_obj_id,
+                frame_index=frame_idx,
+                points=pos_points,
+                labels=pos_labels,
+            )
+            final_prompt["points"] = pos_points
+        return final_prompt
+
+
+class KBorderPointsPrompterV3(KBorderPointsPrompter):
+    def __init__(self, annotation_every_n: int, pos_k=10, neg_k=10):
+        """Enfore positive and negative points to be next to each other."""
+        super().__init__(annotation_every_n, pos_k, neg_k)
+
+    def add_prompt(
+        self,
+        predictor,
+        inference_state,
+        frame_idx: int,
+        ann_obj_id: int,
+        mask_bool: npt.NDArray,
+        neg_mask_bool: npt.NDArray,
+    ):
+        """Add negative consistent point prompts.
+
+        This method saves `prev_point` which is the point prompted in the previous frame (i.e. frame_idx - 1).
+
+        Pick a new point prompt every first frame of annotation.
+        """
+
+        # Make sure the border is not too close to the edge
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        dilated_mask = cv2.dilate(
+            mask_bool.astype(np.uint8), kernel, iterations=15
+        ).astype(
+            np.bool
+        )  # Enlarge the positive mask
+        dilated_dilated_mask = cv2.dilate(
+            dilated_mask.astype(np.uint8), kernel, iterations=15
+        ).astype(
+            np.bool
+        )  # Enlarge the positive mask
+
+        neg_border = dilated_dilated_mask & ~dilated_mask
+
+        neg_border_coords = np.argwhere(neg_border)
+        if len(neg_border_coords) != 0:
+            self.process_negative_prompts(
+                border_coords=neg_border_coords, neg_mask_bool=neg_border
+            )
+
+        # Get the border of the positive mask
+        eroded_mask = cv2.erode(
+            mask_bool.astype(np.uint8), kernel, iterations=15
+        ).astype(np.bool)
+        pos_border = mask_bool & ~eroded_mask
+
+        pos_border_coords = np.argwhere(pos_border)
+        if len(pos_border_coords) != 0:
+            self.process_positive_prompts(
+                border_coords=pos_border_coords, pos_mask_bool=pos_border
+            )
+
+        # Reset the prev pos and neg points if there are no points in the mask
+        mask_coords = np.argwhere(mask_bool)
+        no_points_in_mask = len(mask_coords) == 0
+        if no_points_in_mask:
+            self.prev_pos_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+            self.prev_pos_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
+            self.prev_neg_center_xy = np.ndarray(shape=(0, 2), dtype=np.int32)
+            self.prev_neg_prompts_yx = np.ndarray(shape=(0, 2), dtype=np.int32)
+            return None
+
+        # Prompt
+        final_prompt = {
+            "type": "point",
+            "frame": frame_idx,
+        }
+        if (
+            not self.prev_neg_center_xy.size
+            and not self.prev_neg_prompts_yx.size
+            and not self.prev_pos_center_xy.size
+            and not self.prev_pos_prompts_yx.size
+        ):
+            return None
+
+        # Add the negative prompts
+        if self.prev_neg_center_xy.size or self.prev_neg_prompts_yx.size:
+            neg_points = np.concatenate(
+                [
+                    self.prev_neg_center_xy,
+                    self.prev_neg_prompts_yx[
+                        :, ::-1
+                    ],  # convert from (y, x) to (x, y)
+                ],
+                axis=0,
+            )
+            if neg_points.shape[0] < self.neg_k:
+                print("neg_points", neg_points, flush=True)
+                raise ValueError(
+                    "neg_points.shape[0]",
+                    neg_points.shape[0],
+                    "self.prev_neg_center_xy",
+                    self.prev_neg_center_xy,
+                    "self.prev_pos_center_xy",
+                    self.prev_pos_center_xy,
+                )
             neg_labels = np.zeros(neg_points.shape[0], dtype=np.int32)
             add_point_prompts(
                 predictor=predictor,

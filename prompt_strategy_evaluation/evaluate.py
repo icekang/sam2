@@ -13,6 +13,7 @@ from helper import (
 from prompter import (
     KBorderPointsPrompter,
     KBorderPointsPrompterV2,
+    KBorderPointsPrompterV3,
     KConsistentPointPrompter,
     KNegativeConsistentPointsPrompter,
     MaskPrompter,
@@ -138,6 +139,12 @@ def get_video_prompter(*prompter_names: list[str]):
                         annotation_every_n=EVERY_N, pos_k=9, neg_k=9
                     )
                 )
+            case "k_border_3":
+                prompters.append(
+                    KBorderPointsPrompterV3(
+                        annotation_every_n=EVERY_N, pos_k=9, neg_k=9
+                    )
+                )
             case _:
                 raise ValueError(f"Unknown prompter name: {prompter_name}")
 
@@ -152,7 +159,15 @@ if __name__ == "__main__":
         "--prompter_names",
         nargs="+",
         required=True,
-        help="List of prompter names to use (e.g., mask, random_point, consistent_point, k_consistent_point, k_neg_consistent_point)",
+        help="List of prompter names to use \
+            (e.g., mask, \
+            random_point, \
+            consistent_point, \
+            k_consistent_point, \
+            k_neg_consistent_point, \
+            k_border, \
+            k_border_2, \
+            k_border_3)",
     )
     parser.add_argument(
         "--fold",
