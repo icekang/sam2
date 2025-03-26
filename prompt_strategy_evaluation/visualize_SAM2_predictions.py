@@ -92,7 +92,7 @@ def draw_prompts(ax: plt.axes, prompts: list[dict]):
                     coords=neg_points_xy,
                     labels=np.array([0] * N),
                     ax=ax[2],
-                    marker_size=50,
+                    marker_size=200,
                 )
             if "points" in prompt:
                 points_xy = prompt["points"]
@@ -101,7 +101,7 @@ def draw_prompts(ax: plt.axes, prompts: list[dict]):
                     coords=points_xy,
                     labels=np.array([1] * N),
                     ax=ax[2],
-                    marker_size=50,
+                    marker_size=200,
                 )
 
 
@@ -145,7 +145,7 @@ def create_videos(fold: int, prediction_output: Path, EVERY_N: int):
         groundtruth_path = Path(get_video_label(patient_id))
         image_path = Path(get_video_dir(patient_id))
 
-        fig, ax = plt.subplots(1, 3, figsize=(6, 2))
+        fig, ax = plt.subplots(1, 3, figsize=(12, 4))
 
         image_paths = list(image_path.glob("*.jpg"))
         image_paths.sort()
@@ -196,7 +196,7 @@ def aggregate_prompts(prompts: list[dict]) -> dict:
     """
     aggregated_prompts = {}
     for prompt in prompts:
-        prompt = _prompt_list_to_dict(prompt)
+        # prompt = _prompt_list_to_dict(prompt)
         frame = prompt["frame"]
         if frame not in aggregated_prompts:
             aggregated_prompts[frame] = []
@@ -236,7 +236,7 @@ def get_show_annoation_function(
     image_path = Path(get_video_dir(patient_id))
 
     # Create a figure with 3 subplots
-    fig, ax = plt.subplots(1, 3, figsize=(6, 2))
+    fig, ax = plt.subplots(1, 3, figsize=(20, 10))
 
     # Load the image and groundtruth paths
     image_paths = list(image_path.glob("*.jpg"))
