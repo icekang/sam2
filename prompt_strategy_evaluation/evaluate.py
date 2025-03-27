@@ -101,96 +101,205 @@ def run(
     )
     print("Done")
 
+def setup_argument_parser():
+    """
+    Set up an argument parser with flexible options for different prompters.
 
-def get_video_prompter(*prompter_names: list[str]):
-    """Get a VideoPrompter object with the specified prompters."""
-    prompters = []
-    for prompter_name in prompter_names:
-        match prompter_name:
-            case "mask":
-                prompters.append(MaskPrompter(annotation_every_n=EVERY_N))
-            case "random_point":
-                prompters.append(
-                    RandomPointPrompter(annotation_every_n=EVERY_N)
-                )
-            case "consistent_point":
-                prompters.append(
-                    KConsistentPointPrompter(annotation_every_n=EVERY_N, k=0)
-                )
-            case "k_consistent_point":
-                prompters.append(
-                    KConsistentPointPrompter(annotation_every_n=EVERY_N, k=9)
-                )
-            case "k_neg_consistent_point":
-                prompters.append(
-                    KNegativeConsistentPointsPrompter(
-                        annotation_every_n=EVERY_N, k=19
-                    )
-                )
-            case "k_border":
-                prompters.append(
-                    KBorderPointsPrompter(
-                        annotation_every_n=EVERY_N, pos_k=9, neg_k=19
-                    )
-                )
-            case "k_border_2":
-                prompters.append(
-                    KBorderPointsPrompterV2(
-                        annotation_every_n=EVERY_N, pos_k=9, neg_k=9
-                    )
-                )
-            case "k_border_3":
-                prompters.append(
-                    KBorderPointsPrompterV3(
-                        annotation_every_n=EVERY_N, pos_k=9, neg_k=9
-                    )
-                )
-            case _:
-                raise ValueError(f"Unknown prompter name: {prompter_name}")
-
-    return VideoPrompter(prompters=prompters)
-
-
-if __name__ == "__main__":
+    Returns:
+        ArgumentParser: Configured argument parser
+    """
     parser = argparse.ArgumentParser(
         description="Evaluate video segmentation model."
     )
+
+    # Base required arguments
     parser.add_argument(
         "--prompter_names",
         nargs="+",
         required=True,
-        help="List of prompter names to use \
-            (e.g., mask, \
-            random_point, \
-            consistent_point, \
-            k_consistent_point, \
-            k_neg_consistent_point, \
-            k_border, \
-            k_border_2, \
-            k_border_3)",
+        help="List of prompter names to use",
+        choices=[
+            "mask", "random_point", "consistent_point",
+            "k_consistent_point", "k_neg_consistent_point",
+            "k_border", "k_border_2", "k_border_3"
+        ]
     )
     parser.add_argument(
         "--fold",
         type=int,
         required=True,
-        help="Fold number for cross-validation",
+        help="Fold number for cross-validation"
     )
     parser.add_argument(
         "--mask_every_n",
         type=int,
         required=True,
-        help="Prompt mask every n frames, and prompt points in between",
+        help="Prompt mask every n frames, and prompt points in between"
     )
+
+    # Optional arguments for specific prompters
+    parser.add_argument(
+        "--k_consistent_point_k",
+        type=int,
+        default=0,
+        help="K value for k_consistent_point prompter"
+    )
+    parser.add_argument(
+        "--k_neg_consistent_point_k",
+        type=int,
+        default=19,
+        help="K value for k_neg_consistent_point prompter"
+    )
+    parser.add_argument(
+        "--k_border_pos_k",
+        type=int,
+        default=9,
+        help="Positive K value for k_border prompter"
+    )
+    parser.add_argument(
+        "--k_border_neg_k",
+        type=int,
+        default=19,
+        help="Negative K value for k_border prompter"
+    )
+    parser.add_argument(
+        "--k_border_2_pos_k",
+        type=int,
+        default=9,
+        help="Positive K value for k_border_2 prompter"
+    )
+    parser.add_argument(
+        "--k_border_2_neg_k",
+        type=int,
+        default=9,
+        help="Negative K value for k_border_2 prompter"
+    )
+    parser.add_argument(
+        "--k_border_3_pos_k",
+        type=int,
+        default=9,
+        help="Positive K value for k_border_3 prompter"
+    )
+    parser.add_argument(
+        "--k_border_3_neg_k",
+        type=int,
+        default=9,
+        help="Negative K value for k_border_3 prompter"
+    )
+
+    return parser
+
+def parse_prompter_args(prompter_name, args):
+    """
+    Parse arguments specific to each prompter type.
+
+    Args:
+        prompter_name (str): Name of the prompter
+        args (Namespace): Parsed command-line arguments
+
+    Returns:
+        dict: Keyword arguments for the specific prompter
+    """
+    prompter_kwargs = {
+        'annotation_every_n': args.mask_every_n
+    }
+
+    # Extract custom arguments for specific prompters
+    if prompter_name == 'k_consistent_point':
+        prompter_kwargs['k'] = getattr(args, f'{prompter_name}_k', 0)
+
+    elif prompter_name == 'k_neg_consistent_point':
+        prompter_kwargs['k'] = getattr(args, f'{prompter_name}_k', 19)
+
+    elif prompter_name == 'k_border':
+        prompter_kwargs['pos_k'] = getattr(args, f'{prompter_name}_pos_k', 9)
+        prompter_kwargs['neg_k'] = getattr(args, f'{prompter_name}_neg_k', 19)
+
+    elif prompter_name == 'k_border_2':
+        prompter_kwargs['pos_k'] = getattr(args, f'{prompter_name}_pos_k', 9)
+        prompter_kwargs['neg_k'] = getattr(args, f'{prompter_name}_neg_k', 9)
+
+    elif prompter_name == 'k_border_3':
+        prompter_kwargs['pos_k'] = getattr(args, f'{prompter_name}_pos_k', 9)
+        prompter_kwargs['neg_k'] = getattr(args, f'{prompter_name}_neg_k', 9)
+
+    return prompter_kwargs
+
+def get_video_prompter(*prompter_names: list[str], args=None):
+    """
+    Get a VideoPrompter object with the specified prompters.
+
+    Args:
+        prompter_names (list): List of prompter names
+        args (Namespace, optional): Parsed command-line arguments
+
+    Returns:
+        VideoPrompter: Configured video prompter
+    """
+    prompters = []
+    for prompter_name in prompter_names:
+        match prompter_name:
+            case "mask":
+                prompters.append(MaskPrompter(annotation_every_n=args.mask_every_n))
+            case "random_point":
+                prompters.append(RandomPointPrompter(annotation_every_n=args.mask_every_n))
+            case "consistent_point":
+                prompters.append(ConsistentPointPrompter(annotation_every_n=args.mask_every_n))
+            case "k_consistent_point":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(KConsistentPointPrompter(**kwargs))
+            case "k_neg_consistent_point":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(KNegativeConsistentPointsPrompter(**kwargs))
+            case "k_border":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(KBorderPointsPrompter(**kwargs))
+            case "k_border_2":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(KBorderPointsPrompterV2(**kwargs))
+            case "k_border_3":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(KBorderPointsPrompterV3(**kwargs))
+            case _:
+                raise ValueError(f"Unknown prompter name: {prompter_name}")
+
+    return VideoPrompter(prompters=prompters)
+
+# Create detailed output name with argument values
+def get_prompter_arg_string(prompter_name):
+    """Generate a string of argument values for a specific prompter."""
+    if prompter_name == 'k_consistent_point':
+        return f"k{getattr(args, f'{prompter_name}_k', 0)}"
+    elif prompter_name == 'k_neg_consistent_point':
+        return f"k{getattr(args, f'{prompter_name}_k', 19)}"
+    elif prompter_name in ['k_border', 'k_border_2', 'k_border_3']:
+        pos_k = getattr(args, f'{prompter_name}_pos_k', 9)
+        neg_k = getattr(args, f'{prompter_name}_neg_k', 9)
+        return f"pos{pos_k}_neg{neg_k}"
+    return ""
+
+if __name__ == "__main__":
+    # Set up argument parser
+    parser = setup_argument_parser()
     args = parser.parse_args()
 
     # Get project root directory more reliably
     project_root = Path(__file__).resolve().parent.parent
 
-    video_prompter = get_video_prompter(*args.prompter_names)
-    model_cfg_name = f"fold{args.fold}.yaml"
-    strategy_name = "::".join(sorted(args.prompter_names))
+    # Create video prompter with flexible arguments
+    video_prompter = get_video_prompter(*args.prompter_names, args=args)
 
-    EVERY_N = args.mask_every_n
+    # Generate detailed strategy name with argument values
+    detailed_strategy_name = "::".join([
+        f"{name}_{get_prompter_arg_string(name)}"
+        if name in ['k_consistent_point', 'k_neg_consistent_point', 'k_border', 'k_border_2', 'k_border_3']
+        else name
+        for name in sorted(args.prompter_names)
+    ])
+
+    # Rest of the script remains the same
+    model_cfg_name = f"fold{args.fold}.yaml"
+
     run(
         model_cfg="configs/sam2.1/sam2.1_hiera_s.yaml",
         sam2_checkpoint=str(
@@ -200,7 +309,7 @@ if __name__ == "__main__":
             / model_cfg_name
             / "checkpoints/checkpoint.pt"
         ),
-        output_name=f"{model_cfg_name[:-5]}_{strategy_name}",
+        output_name=f"{model_cfg_name[:-5]}_{detailed_strategy_name}",
         fold=args.fold,
         video_prompter=video_prompter,
     )
