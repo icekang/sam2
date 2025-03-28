@@ -9,6 +9,7 @@ import matplotlib.animation as animation
 import numpy as np
 from PIL import Image
 from helper import get_splits, get_video_label, get_video_dir
+from evaluate import get_prompter_arg_string, setup_argument_parser
 
 color_pallete = np.array([[0, 0, 0], [0, 255, 0], [0, 255, 0]])
 
@@ -259,37 +260,24 @@ def get_show_annoation_function(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Evaluate video segmentation model."
-    )
-    parser.add_argument(
-        "--prompter_names",
-        nargs="+",
-        required=True,
-        help="List of prompter names to use (e.g., mask, random_point, consistent_point, k_consistent_point)",
-    )
-    parser.add_argument(
-        "--fold",
-        type=int,
-        required=True,
-        help="Fold number for cross-validation",
-    )
-    parser.add_argument(
-        "--mask_every_n",
-        type=int,
-        required=True,
-        help="Prompt mask every n frames, and prompt points in between",
-    )
+    # Set up argument parser
+    parser = setup_argument_parser()
     args = parser.parse_args()
 
-    # Create the prompting strategy name
-    strategy_name = "::".join(sorted(args.prompter_names))
-    EVERY_N = args.mask_every_n
-    fold = args.fold
+    # Get project root directory more reliably
+    project_root = Path(__file__).resolve().parent.parent
 
-    prediction_output_name = "fold{}_{}_annotate_every_{}".format(
-        fold, strategy_name, EVERY_N
+    # Generate detailed strategy name with argument values
+    detailed_strategy_name = "::".join([
+        f"{name}_{get_prompter_arg_string(name, args)}"
+        if name in ['k_consistent_point', 'k_neg_consistent_point', 'k_border', 'k_border_2', 'k_border_3']
+        else name
+        for name in sorted(args.prompter_names)
+    ])
+
+    prediction_output_name = get_prediction_output(
+        fold=args.fold, strategy_name=detailed_strategy_name, EVERY_N=args.mask_every_n
     )
     prediction_output = Path(prediction_output_name)
 
-    create_videos(fold, prediction_output, EVERY_N)
+    create_videos(args.fold, prediction_output, args.mask_every_n)

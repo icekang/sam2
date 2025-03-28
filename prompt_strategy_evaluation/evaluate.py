@@ -266,7 +266,7 @@ def get_video_prompter(*prompter_names: list[str], args=None):
     return VideoPrompter(prompters=prompters)
 
 # Create detailed output name with argument values
-def get_prompter_arg_string(prompter_name):
+def get_prompter_arg_string(prompter_name, args):
     """Generate a string of argument values for a specific prompter."""
     if prompter_name == 'k_consistent_point':
         return f"k{getattr(args, f'{prompter_name}_k', 0)}"
@@ -291,7 +291,7 @@ if __name__ == "__main__":
 
     # Generate detailed strategy name with argument values
     detailed_strategy_name = "::".join([
-        f"{name}_{get_prompter_arg_string(name)}"
+        f"{name}_{get_prompter_arg_string(name, args)}"
         if name in ['k_consistent_point', 'k_neg_consistent_point', 'k_border', 'k_border_2', 'k_border_3']
         else name
         for name in sorted(args.prompter_names)
