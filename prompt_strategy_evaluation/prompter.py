@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 from abc import abstractmethod
+from skimage.morphology import skeletonize
 
 random.seed(0)
 
@@ -792,3 +793,49 @@ class MaskPrompter(Prompter):
                 mask=mask_bool,
             )
             return {"type": "mask", "frame": frame_idx, "mask": mask_bool}
+
+
+class ScribblePrompter(Prompter):
+    def __init__(
+        self,
+        annotation_every_n: int,
+        image_size: tuple[int, int] = (1024, 1024),
+        scribble_size: int = 5,
+        prompt_at_mask_prompt: bool = False,
+    ):
+        super().__init__(annotation_every_n)
+        self.scribble_size = scribble_size
+        self.prev_scribble = np.ndarray(shape=image_size, dtype=np.bool)
+        self.prompt_at_mask_prompt = prompt_at_mask_prompt # if True, prompt at the same time as the mask prompt
+
+    def _should_prompt(self, frame_idx: int) -> bool:
+        if self.prompt_at_mask_prompt:
+            return frame_idx % self.annotation_every_n == 0
+        return frame_idx % self.annotation_every_n != 0
+
+    def add_prompt(
+        self,
+        predictor,
+        inference_state,
+        frame_idx: int,
+        ann_obj_id: int,
+        mask_bool: npt.NDArray,
+        neg_mask_bool: npt.NDArray,
+    ):
+        if not self._should_prompt(frame_idx):
+            return None
+
+        # Get skeleton of the mask
+        mask_skeleton = skeletonize(mask_bool)
+
+        # Make the skeleton as a scribble of self.scribble_size simple circle brush
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.scribble_size, self.scribble_size))
+        mask_scribble = cv2.dilate(mask_skeleton.astype(np.uint8), kernel, iterations=1).astype(np.bool)
+
+        _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
+            inference_state=inference_state,
+            frame_idx=frame_idx,
+            obj_id=ann_obj_id,
+            mask=mask_scribble,
+        )
+        return {"type": "mask", "frame": frame_idx, "mask": mask_scribble}

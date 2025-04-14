@@ -13,6 +13,16 @@ from evaluate import get_prompter_arg_string, setup_argument_parser
 
 color_pallete = np.array([[0, 0, 0], [0, 255, 0], [0, 255, 0]])
 
+def show_mask(mask, ax, obj_id=None, random_color=False):
+    if random_color:
+        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+    else:
+        cmap = plt.get_cmap("tab10")
+        cmap_idx = 0 if obj_id is None else obj_id
+        color = np.array([*cmap(cmap_idx)[:3], 0.6])
+    h, w = mask.shape[-2:]
+    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+    ax.imshow(mask_image)
 
 def show_points(coords, labels, ax: plt.axes, marker_size=200):
     pos_points = coords[labels == 1]
@@ -84,7 +94,12 @@ def draw_prompts(ax: plt.axes, prompts: list[dict]):
     for prompt in prompts:
         prompt_type = prompt["type"]
         if prompt_type == "mask":
-            pass
+            show_mask(
+                mask=prompt["mask"],
+                ax=ax[2],
+                obj_id=prompt["obj_id"],
+                random_color=False,
+            )
         elif prompt_type == "point":
             if "neg_points" in prompt:
                 neg_points_xy = prompt["neg_points"]

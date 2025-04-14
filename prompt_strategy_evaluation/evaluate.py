@@ -18,6 +18,7 @@ from prompter import (
     KNegativeConsistentPointsPrompter,
     MaskPrompter,
     RandomPointPrompter,
+    ScribblePrompter,
 )
 from video_prompter import VideoPrompter
 
@@ -121,7 +122,8 @@ def setup_argument_parser():
         choices=[
             "mask", "random_point", "consistent_point",
             "k_consistent_point", "k_neg_consistent_point",
-            "k_border", "k_border_2", "k_border_3"
+            "k_border", "k_border_2", "k_border_3",
+            "scribble",
         ]
     )
     parser.add_argument(
@@ -260,6 +262,10 @@ def get_video_prompter(*prompter_names: list[str], args=None):
             case "k_border_3":
                 kwargs = parse_prompter_args(prompter_name, args)
                 prompters.append(KBorderPointsPrompterV3(**kwargs))
+            case "scribble":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(ScribblePrompter(**kwargs))
+
             case _:
                 raise ValueError(f"Unknown prompter name: {prompter_name}")
 
@@ -276,6 +282,8 @@ def get_prompter_arg_string(prompter_name, args):
         pos_k = getattr(args, f'{prompter_name}_pos_k', 9)
         neg_k = getattr(args, f'{prompter_name}_neg_k', 9)
         return f"pos{pos_k}_neg{neg_k}"
+    elif prompter_name == "scribble":
+        return "scribble"
     return ""
 
 if __name__ == "__main__":
