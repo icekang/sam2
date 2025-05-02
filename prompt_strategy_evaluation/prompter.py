@@ -806,7 +806,7 @@ class ScribblePrompter(Prompter):
         super().__init__(annotation_every_n)
         self.scribble_size = scribble_size
         self.prev_scribble = np.ndarray(shape=image_size, dtype=np.bool)
-        self.prompt_at_mask_prompt = prompt_at_mask_prompt # if True, prompt at the same time as the mask prompt
+        self.prompt_at_mask_prompt = prompt_at_mask_prompt  # if True, prompt at the same time as the mask prompt
 
     def _should_prompt(self, frame_idx: int) -> bool:
         if self.prompt_at_mask_prompt:
@@ -829,8 +829,12 @@ class ScribblePrompter(Prompter):
         mask_skeleton = skeletonize(mask_bool)
 
         # Make the skeleton as a scribble of self.scribble_size simple circle brush
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.scribble_size, self.scribble_size))
-        mask_scribble = cv2.dilate(mask_skeleton.astype(np.uint8), kernel, iterations=1).astype(np.bool)
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (self.scribble_size, self.scribble_size)
+        )
+        mask_scribble = cv2.dilate(
+            mask_skeleton.astype(np.uint8), kernel, iterations=1
+        ).astype(np.bool)
 
         _, out_obj_ids, out_mask_logits = predictor.add_new_mask(
             inference_state=inference_state,
@@ -839,3 +843,83 @@ class ScribblePrompter(Prompter):
             mask=mask_scribble,
         )
         return {"type": "mask", "frame": frame_idx, "mask": mask_scribble}
+
+
+class ScribblePrompterV2(Prompter):
+    """Prompt the sribble as points."""
+
+    def __init__(
+        self,
+        annotation_every_n: int,
+        image_size: tuple[int, int] = (1024, 1024),
+        scribble_size: int = 5,
+        prompt_at_mask_prompt: bool = False,
+    ):
+        super().__init__(annotation_every_n)
+        self.scribble_size = scribble_size
+        self.prev_scribble = np.ndarray(shape=image_size, dtype=np.bool)
+        self.prompt_at_mask_prompt = prompt_at_mask_prompt  # if True, prompt at the same time as the mask prompt
+
+    def _should_prompt(self, frame_idx: int) -> bool:
+        if self.prompt_at_mask_prompt:
+            return frame_idx % self.annotation_every_n == 0
+        return frame_idx % self.annotation_every_n != 0
+
+    def add_prompt(
+        self,
+        predictor,
+        inference_state,
+        frame_idx: int,
+        ann_obj_id: int,
+        mask_bool: npt.NDArray,
+        neg_mask_bool: npt.NDArray,
+    ):
+        if not self._should_prompt(frame_idx):
+            return None
+
+        # Get skeleton of the mask
+        mask_skeleton = skeletonize(mask_bool)
+
+        # Make the skeleton as a scribble of self.scribble_size simple circle brush
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (self.scribble_size, self.scribble_size)
+        )
+        mask_scribble = cv2.dilate(
+            mask_skeleton.astype(np.uint8), kernel, iterations=1
+        ).astype(np.bool)
+        neg_mask_scribble = cv2.dilate(
+            neg_mask_bool.astype(np.uint8), kernel, iterations=1
+        ).astype(np.bool)
+
+        # Get the points of the scribble
+        points_scribble = np.argwhere(mask_scribble)
+        if len(points_scribble) == 0:
+            return None
+
+        points_scribble = points_scribble[:, ::-1]  # (y, x) -> (x, y)
+        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+            inference_state=inference_state,
+            frame_idx=frame_idx,
+            obj_id=ann_obj_id,
+            points=points_scribble,
+            labels=np.ones(points_scribble.shape[0], dtype=np.int32),
+        )
+
+        # Get the points of the negative scribble
+        points_neg_scribble = np.argwhere(neg_mask_scribble)
+        if len(points_neg_scribble) != 0:
+            points_neg_scribble = points_neg_scribble[:, ::-1]
+        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+            inference_state=inference_state,
+            frame_idx=frame_idx,
+            obj_id=ann_obj_id,
+            points=points_neg_scribble,
+            labels=np.zeros(points_neg_scribble.shape[0], dtype=np.int32),
+        )
+        # Return the points of the scribble
+        return {
+            "type": "point",
+            "frame": frame_idx,
+            "points": points_scribble,
+            "neg_points": points_neg_scribble,
+        }

@@ -19,6 +19,7 @@ from prompter import (
     MaskPrompter,
     RandomPointPrompter,
     ScribblePrompter,
+    ScribblePrompterV2,
 )
 from video_prompter import VideoPrompter
 
@@ -265,6 +266,9 @@ def get_video_prompter(*prompter_names: list[str], args=None):
             case "scribble":
                 kwargs = parse_prompter_args(prompter_name, args)
                 prompters.append(ScribblePrompter(**kwargs))
+            case "scribble_2":
+                kwargs = parse_prompter_args(prompter_name, args)
+                prompters.append(ScribblePrompterV2(**kwargs))
 
             case _:
                 raise ValueError(f"Unknown prompter name: {prompter_name}")
@@ -284,6 +288,8 @@ def get_prompter_arg_string(prompter_name, args):
         return f"pos{pos_k}_neg{neg_k}"
     elif prompter_name == "scribble":
         return "scribble"
+    elif prompter_name == "scribble_2":
+        return "scribble_2"
     return ""
 
 if __name__ == "__main__":
