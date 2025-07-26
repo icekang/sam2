@@ -3,6 +3,9 @@
 source activate sam2
 which python
 
+export nnUNet_preprocessed=/home/gridsan/amanicka/datasets/nnUNet_Datasets/nnUNet_preprocessed
+export nnUNet_raw=/home/gridsan/amanicka/datasets/nnUNet_Datasets/nnUNet_raw
+
 python -u evaluate.py \
  --prompter_names mask scribble \
  --fold 0 \

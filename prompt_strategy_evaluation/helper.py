@@ -183,16 +183,16 @@ def get_splits():
 
 
 def get_video_dir(filename: str):
-    video_dir = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTr/{filename}"
+    video_dir = f"/home/gridsan/amanicka/datasets/SAM2_Dataset302_Calcium_OCTv2/imagesTr/{filename}"
     return video_dir
 
 
 def get_video_label(filename: str):
-    video_label = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTr/{filename}"
+    video_label = f"/home/gridsan/amanicka/datasets/SAM2_Dataset302_Calcium_OCTv2/labelsTr/{filename}"
     return video_label
 
 def get_negative_video_label(filename: str):
-    video_label = f"/home/gridsan/nchutisilp/datasets/SAM2_Dataset302_Calcium_OCTv2/LaW_predictions/{filename}"
+    video_label = f"/home/gridsan/amanicka/datasets/SAM2_Dataset302_Calcium_OCTv2/LaW_predictions/{filename}"
     return video_label
 
 def calcuate_dice_score(
