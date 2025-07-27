@@ -124,7 +124,7 @@ def setup_argument_parser():
             "mask", "random_point", "consistent_point",
             "k_consistent_point", "k_neg_consistent_point",
             "k_border", "k_border_2", "k_border_3",
-            "scribble",
+            "scribble", "scribble_2",
         ]
     )
     parser.add_argument(
